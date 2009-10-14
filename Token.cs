@@ -15,6 +15,7 @@ namespace ParseCs
         CommentSlashSlash,
         CommentSlashStar,
         PreprocessorDirective,
+        EndOfFile
     }
 
     public class Token

@@ -41,7 +41,7 @@ namespace ParseCs
     {
         public List<CsUsingNamespace> UsingNamespaces = new List<CsUsingNamespace>();
         public List<CsUsingAlias> UsingAliases = new List<CsUsingAlias>();
-        public List<CsCustomAttribute> AssemblyCustomAttributes = new List<CsCustomAttribute>();
+        public List<CsCustomAttributeGroup> CustomAttributes = new List<CsCustomAttributeGroup>();
         public List<CsNamespace> Namespaces = new List<CsNamespace>();
         public List<CsType> Types = new List<CsType>();
 
@@ -57,6 +57,11 @@ namespace ParseCs
             foreach (var ns in UsingAliases)
                 sb.Append(ns.ToString());
             if (UsingAliases.Any())
+                sb.Append('\n');
+
+            foreach (var attr in CustomAttributes)
+                sb.Append(attr.ToString());
+            if (CustomAttributes.Any())
                 sb.Append('\n');
 
             bool first = true;
@@ -141,8 +146,7 @@ namespace ParseCs
     public abstract class CsMember : CsNode
     {
         public List<CsCustomAttributeGroup> CustomAttributes;
-        public bool IsInternal, IsPrivate, IsProtected, IsPublic;
-
+        public bool IsInternal, IsPrivate, IsProtected, IsPublic, IsNew;
         protected virtual StringBuilder modifiersCs()
         {
             var sb = new StringBuilder(CustomAttributes.Select(c => c.ToString()).JoinString());
@@ -150,6 +154,7 @@ namespace ParseCs
             if (IsInternal) sb.Append("internal ");
             if (IsPrivate) sb.Append("private ");
             if (IsPublic) sb.Append("public ");
+            if (IsNew) sb.Append("new ");
             return sb;
         }
     }
@@ -267,9 +272,11 @@ namespace ParseCs
     {
         public CsTypeIdentifier ReturnType;
         public List<CsParameter> Parameters = new List<CsParameter>();
+        public bool IsUnsafe;
         public override string ToString()
         {
             var sb = modifiersCs();
+            if (IsUnsafe) sb.Append("unsafe ");
             sb.Append("delegate ");
             sb.Append(ReturnType.ToString());
             sb.Append(' ');
@@ -330,7 +337,8 @@ namespace ParseCs
     public abstract class CsMemberLevel2 : CsMember
     {
         public string Name;
-        public bool IsAbstract, IsVirtual, IsOverride, IsSealed, IsStatic;
+        public CsTypeIdentifier ImplementsFrom;
+        public bool IsAbstract, IsVirtual, IsOverride, IsSealed, IsStatic, IsExtern, IsUnsafe;
 
         public CsTypeIdentifier Type;  // for methods, this is the return type
 
@@ -342,6 +350,8 @@ namespace ParseCs
             if (IsOverride) sb.Append("override ");
             if (IsSealed) sb.Append("sealed ");
             if (IsStatic) sb.Append("static ");
+            if (IsExtern) sb.Append("extern ");
+            if (IsUnsafe) sb.Append("unsafe ");
             return sb;
         }
     }
@@ -377,9 +387,13 @@ namespace ParseCs
     }
     public class CsField : CsMultiMember
     {
+        public bool IsReadonly;
+        public bool IsConst;
         public override string ToString()
         {
             var sb = modifiersCs();
+            if (IsReadonly) sb.Append("readonly ");
+            if (IsConst) sb.Append("const ");
             sb.Append(Type.ToString());
             sb.Append(' ');
             for (int i = 0; i < NamesAndInitializers.Count; i++)
@@ -401,7 +415,23 @@ namespace ParseCs
     public class CsProperty : CsMemberLevel2
     {
         public List<CsSimpleMethod> Methods = new List<CsSimpleMethod>();
-        public override string ToString() { return string.Concat(modifiersCs(), Type.ToString(), ' ', Name, "\n{\n", Methods.Select(m => m.ToString()).JoinString().Indent(), "}\n"); }
+        public override string ToString()
+        {
+            var sb = new StringBuilder();
+            sb.Append(modifiersCs());
+            sb.Append(Type.ToString());
+            sb.Append(' ');
+            if (ImplementsFrom != null)
+            {
+                sb.Append(ImplementsFrom.ToString());
+                sb.Append('.');
+            }
+            sb.Append(Name);
+            sb.Append("\n{\n");
+            sb.Append(Methods.Select(m => m.ToString()).JoinString().Indent());
+            sb.Append("}\n");
+            return sb.ToString();
+        }
     }
     public class CsIndexedProperty : CsProperty
     {
@@ -457,6 +487,11 @@ namespace ParseCs
             var sb = modifiersCs();
             sb.Append(Type.ToString());
             sb.Append(' ');
+            if (ImplementsFrom != null)
+            {
+                sb.Append(ImplementsFrom.ToString());
+                sb.Append('.');
+            }
             sb.Append(Name);
             sb.Append(genericTypeParametersCs());
             sb.Append('(');
@@ -527,56 +562,54 @@ namespace ParseCs
         public bool IsThis;
         public bool IsOut;
         public bool IsRef;
+        public bool IsParams;
         public override string ToString()
         {
-            return string.Concat(CustomAttributes.Select(c => c.ToString()).JoinString(), IsThis ? "this " : string.Empty, IsOut ? "out " : string.Empty, IsRef ? "ref " : string.Empty, Type.ToString(), " ", Name);
+            return string.Concat(CustomAttributes.Select(c => c.ToString()).JoinString(), IsThis ? "this " : string.Empty, IsParams ? "params " : string.Empty, IsOut ? "out " : string.Empty, IsRef ? "ref " : string.Empty, Type.ToString(), " ", Name);
         }
     }
 
-    public abstract class CsTypeIdentifier : CsNode { }
+    public abstract class CsTypeIdentifier : CsNode
+    {
+        public abstract bool IsSingleIdentifier();
+    }
 
     public class CsEmptyGenericTypeIdentifier : CsTypeIdentifier
     {
-        public override string ToString()
-        {
-            return string.Empty;
-        }
+        public override string ToString() { return string.Empty; }
+        public override bool IsSingleIdentifier() { return false; }
     }
     public class CsConcreteTypeIdentifierPart : CsNode
     {
         public string Name;
         public List<CsTypeIdentifier> GenericTypeParameters = null;
-        public override string ToString()
-        {
-            if (GenericTypeParameters == null)
-                return Name;
-            return string.Concat(Name, '<', GenericTypeParameters.Select(p => p.ToString()).JoinString(", "), '>');
-        }
+        public override string ToString() { return GenericTypeParameters == null ? Name : string.Concat(Name, '<', GenericTypeParameters.Select(p => p.ToString()).JoinString(", "), '>'); }
     }
     public class CsConcreteTypeIdentifier : CsTypeIdentifier
     {
         public bool HasGlobal;
         public List<CsConcreteTypeIdentifierPart> Parts = new List<CsConcreteTypeIdentifierPart>();
         public override string ToString() { return (HasGlobal ? "global::" : string.Empty) + Parts.Select(p => p.ToString()).JoinString("."); }
+        public override bool IsSingleIdentifier() { return !HasGlobal && Parts.Count == 1 && Parts[0].GenericTypeParameters == null; }
     }
     public class CsArrayTypeIdentifier : CsTypeIdentifier
     {
         public CsTypeIdentifier InnerType;
         public List<int> ArrayRanks;
-        public override string ToString()
-        {
-            return InnerType.ToString() + ArrayRanks.Select(rank => string.Concat("[", new string(',', rank - 1), "]")).JoinString();
-        }
+        public override string ToString() { return InnerType.ToString() + ArrayRanks.Select(rank => string.Concat("[", new string(',', rank - 1), "]")).JoinString(); }
+        public override bool IsSingleIdentifier() { return false; }
     }
     public class CsPointerTypeIdentifier : CsTypeIdentifier
     {
         public CsTypeIdentifier InnerType;
         public override string ToString() { return InnerType.ToString() + "*"; }
+        public override bool IsSingleIdentifier() { return false; }
     }
     public class CsNullableTypeIdentifier : CsTypeIdentifier
     {
         public CsTypeIdentifier InnerType;
         public override string ToString() { return InnerType.ToString() + "?"; }
+        public override bool IsSingleIdentifier() { return false; }
     }
 
     public abstract class CsGenericTypeConstraint : CsNode { }
@@ -702,12 +735,16 @@ namespace ParseCs
     }
     public class CsForStatement : CsStatement
     {
-        public CsExpression InitializationExpression;
+        public CsStatement InitializationStatement;
         public CsExpression TerminationCondition;
         public CsExpression LoopExpression;
         public CsStatement Body;
-        protected void commonPartsCs(StringBuilder sb)
+        public override string ToString()
         {
+            var sb = new StringBuilder(gotoLabels());
+            sb.Append("for (");
+            if (InitializationStatement != null)
+                sb.Append(InitializationStatement.ToString());
             sb.Append(';');
             if (TerminationCondition != null)
             {
@@ -722,31 +759,34 @@ namespace ParseCs
             }
             sb.Append(")\n");
             sb.Append(Body is CsBlock ? Body.ToString() : Body.ToString().Indent());
-        }
-        public override string ToString()
-        {
-            var sb = new StringBuilder(gotoLabels());
-            sb.Append("for (");
-            if (InitializationExpression != null)
-                sb.Append(InitializationExpression.ToString());
-            commonPartsCs(sb);
             return sb.ToString();
         }
     }
-    public class CsForStatementWithDeclaration : CsForStatement
+    public class CsUsingStatement : CsStatement
     {
-        public CsTypeIdentifier VariableType;
-        public string VariableName;
+        public CsStatement InitializationStatement;
+        public CsStatement Body;
         public override string ToString()
         {
             var sb = new StringBuilder(gotoLabels());
-            sb.Append("for (");
-            sb.Append(VariableType.ToString());
-            sb.Append(' ');
-            sb.Append(VariableName);
-            sb.Append(" = ");
-            sb.Append(InitializationExpression.ToString());
-            commonPartsCs(sb);
+            sb.Append("using (");
+            sb.Append(InitializationStatement.ToString());
+            sb.Append(")\n");
+            sb.Append(Body is CsBlock || Body is CsUsingStatement ? Body.ToString() : Body.ToString().Indent());
+            return sb.ToString();
+        }
+    }
+    public class CsFixedStatement : CsStatement
+    {
+        public CsStatement InitializationStatement;
+        public CsStatement Body;
+        public override string ToString()
+        {
+            var sb = new StringBuilder(gotoLabels());
+            sb.Append("fixed (");
+            sb.Append(InitializationStatement.ToString());
+            sb.Append(")\n");
+            sb.Append(Body is CsBlock || Body is CsFixedStatement ? Body.ToString() : Body.ToString().Indent());
             return sb.ToString();
         }
     }
@@ -765,12 +805,15 @@ namespace ParseCs
                 return string.Concat(gotoLabels(), "if (", IfExpression.ToString(), ")\n", Statement is CsBlock ? Statement.ToString() : Statement.ToString().Indent(), "else\n", ElseStatement is CsBlock ? ElseStatement.ToString() : ElseStatement.ToString().Indent());
         }
     }
-    public class CsWhileStatement : CsStatement
+    public abstract class CsExpressionBlockStatement : CsStatement
     {
-        public CsExpression WhileExpression;
+        public CsExpression Expression;
         public CsStatement Statement;
-        public override string ToString() { return string.Concat(gotoLabels(), "while (", WhileExpression.ToString(), ")\n", Statement is CsBlock ? Statement.ToString() : Statement.ToString().Indent()); }
+        public abstract string Keyword { get; }
+        public override string ToString() { return string.Concat(gotoLabels(), Keyword, " (", Expression.ToString(), ")\n", Statement is CsBlock ? Statement.ToString() : Statement.ToString().Indent()); }
     }
+    public class CsWhileStatement : CsExpressionBlockStatement { public override string Keyword { get { return "while"; } } }
+    public class CsLockStatement : CsExpressionBlockStatement { public override string Keyword { get { return "lock"; } } }
     public class CsDoWhileStatement : CsStatement
     {
         public CsExpression WhileExpression;
@@ -906,7 +949,7 @@ namespace ParseCs
             );
         }
     }
-    public enum UnaryOperator { Plus, Minus, Not, Neg, PrefixInc, PrefixDec, PostfixInc, PostfixDec }
+    public enum UnaryOperator { Plus, Minus, Not, Neg, PrefixInc, PrefixDec, PostfixInc, PostfixDec, PointerDeref, AddressOf }
     public class CsUnaryOperatorExpression : CsExpression
     {
         public UnaryOperator Operator;
@@ -923,7 +966,9 @@ namespace ParseCs
                 Operator == UnaryOperator.Not ? "!" :
                 Operator == UnaryOperator.Neg ? "~" :
                 Operator == UnaryOperator.PrefixInc ? "++" :
-                Operator == UnaryOperator.PrefixDec ? "--" : null
+                Operator == UnaryOperator.PrefixDec ? "--" :
+                Operator == UnaryOperator.PointerDeref ? "*" :
+                Operator == UnaryOperator.AddressOf ? "&" : null
             ) + Operand.ToString();
         }
     }
@@ -938,12 +983,13 @@ namespace ParseCs
         public CsExpression Left, Right;
         public override string ToString() { return string.Concat(Left.ToString(), ".", Right.ToString()); }
     }
+    public enum ParameterType { In, Out, Ref };
     public class CsFunctionCallExpression : CsExpression
     {
         public bool IsIndexer;
         public CsExpression Left;
-        public List<CsExpression> Parameters = new List<CsExpression>();
-        public override string ToString() { return string.Concat(Left.ToString(), IsIndexer ? '[' : '(', Parameters.Select(p => p.ToString()).JoinString(", "), IsIndexer ? ']' : ')'); }
+        public List<Tuple<ParameterType, CsExpression>> Parameters = new List<Tuple<ParameterType, CsExpression>>();
+        public override string ToString() { return string.Concat(Left.ToString(), IsIndexer ? '[' : '(', Parameters.Select(p => (p.E1 == ParameterType.Out ? "out " : p.E1 == ParameterType.Ref ? "ref " : string.Empty) + p.E2.ToString()).JoinString(", "), IsIndexer ? ']' : ')'); }
     }
     public abstract class CsTypeOperatorExpression : CsExpression { public CsTypeIdentifier Type; }
     public class CsTypeofExpression : CsTypeOperatorExpression { public override string ToString() { return string.Concat("typeof(", Type.ToString(), ')'); } }
@@ -1013,7 +1059,7 @@ namespace ParseCs
     public class CsNewConstructorExpression : CsExpression
     {
         public CsTypeIdentifier Type;
-        public List<CsExpression> Parameters = new List<CsExpression>();
+        public List<Tuple<ParameterType, CsExpression>> Parameters = new List<Tuple<ParameterType, CsExpression>>();
         public List<CsInitializer> Initializers;
         public List<CsExpression> Adds;
         public override string ToString()
@@ -1023,7 +1069,7 @@ namespace ParseCs
             if (Parameters.Any() || (Initializers == null && Adds == null))
             {
                 sb.Append('(');
-                sb.Append(Parameters.Select(p => p.ToString()).JoinString(", "));
+                sb.Append(Parameters.Select(p => (p.E1 == ParameterType.Out ? "out " : p.E1 == ParameterType.Ref ? "ref " : string.Empty) + p.E2.ToString()).JoinString(", "));
                 sb.Append(')');
             }
             if (Initializers != null)
@@ -1032,6 +1078,8 @@ namespace ParseCs
                 sb.Append(Initializers.Select(ini => ini.ToString()).JoinString(", "));
                 sb.Append(" }");
             }
+            else if (Adds != null && Adds.Count == 0)
+                sb.Append(" { }");
             else if (Adds != null)
             {
                 sb.Append(" { ");
@@ -1049,7 +1097,35 @@ namespace ParseCs
     public class CsNewImplicitlyTypedArrayExpression : CsExpression
     {
         public List<CsExpression> Items = new List<CsExpression>();
-        public override string ToString() { return string.Concat("new[] { ", Items.Select(p => p.ToString()).JoinString(", "), " }"); }
+        public override string ToString() { return Items.Count == 0 ? "new[] { }" : string.Concat("new[] { ", Items.Select(p => p.ToString()).JoinString(", "), " }"); }
+    }
+    public class CsNewArrayExpression : CsExpression
+    {
+        public CsTypeIdentifier Type;
+        public List<CsExpression> SizeExpressions = new List<CsExpression>();
+        public List<int> AdditionalRanks = new List<int>();
+        public List<CsExpression> Items = new List<CsExpression>();
+        public override string ToString()
+        {
+            var sb = new StringBuilder("new ");
+            sb.Append(Type.ToString());
+            sb.Append('[');
+            sb.Append(SizeExpressions.Select(s => s.ToString()).JoinString(", "));
+            sb.Append(']');
+            sb.Append(AdditionalRanks.Select(a => "[" + new string(',', a - 1) + ']'));
+            if (Items != null)
+            {
+                if (Items.Count == 0)
+                    sb.Append(" { }");
+                else
+                {
+                    sb.Append(" { ");
+                    sb.Append(Items.Select(p => p.ToString()).JoinString(", "));
+                    sb.Append(" }");
+                }
+            }
+            return sb.ToString();
+        }
     }
     public abstract class CsLambaExpression : CsExpression
     {
@@ -1065,16 +1141,25 @@ namespace ParseCs
         public CsBlock Block;
         public override string ToString() { return string.Concat(ParameterNames.Count == 1 ? ParameterNames[0] : string.Concat('(', ParameterNames.JoinString(", "), ')'), " =>\n", Block.ToString(), '\n'); }
     }
-    public enum RefType { Ref, Out };
-    public class CsRefParameterExpression : CsExpression
-    {
-        public RefType Type;
-        public string Name;
-        public override string ToString() { return (Type == RefType.Out ? "out " : Type == RefType.Ref ? "ref " : null) + Name; }
-    }
     public class CsArrayLiteralExpression : CsExpression
     {
         public List<CsExpression> Expressions = new List<CsExpression>();
-        public override string ToString() { return string.Concat("{ ", Expressions.Select(e => e.ToString()).JoinString(", "), " }"); }
+        public override string ToString()
+        {
+            if (!Expressions.Any())
+                return "{ }";
+            var sb = new StringBuilder();
+            sb.Append("{ ");
+            bool first = true;
+            foreach (var expr in Expressions)
+            {
+                if (!first)
+                    sb.Append(", ");
+                sb.Append(expr.ToString());
+                first = false;
+            }
+            sb.Append(" }");
+            return sb.ToString();
+        }
     }
 }

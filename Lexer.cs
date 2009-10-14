@@ -49,8 +49,12 @@ namespace ParseCs
                 (t.Type != TokenType.PreprocessorDirective || (opt & LexOptions.IgnorePreprocessorDirectives) == 0));
         }
 
+        public static Token EndToken;
+
         public static IEnumerable<Token> Lex(string data)
         {
+            EndToken = new Token(null, TokenType.EndOfFile, data.Length);
+
             int index = 0;
             while (index < data.Length && char.IsWhiteSpace(data, index))
                 index += char.IsSurrogate(data, index) ? 2 : 1;
@@ -65,7 +69,7 @@ namespace ParseCs
                         if (index + i < data.Length && kw[i] != data[index + i])
                             goto ContinueForeachKw;
 
-                    if (index + kw.Length < dataLength && char.IsLetterOrDigit(data, index + kw.Length))
+                    if (index + kw.Length >= dataLength || data[index + kw.Length] == '_' || char.IsLetterOrDigit(data, index + kw.Length))
                         continue;
 
                     yield return new Token(kw, TokenType.Builtin, index);
@@ -76,14 +80,14 @@ namespace ParseCs
                 }
 
                 // Identifiers
-                if (char.IsLetter(data, index) || data[index] == '_' || (data[index] == '@' && index + 1 < dataLength && char.IsLetter(data, index + 1)))
+                if (char.IsLetter(data, index) || data[index] == '_' || (data[index] == '@' && index + 1 < dataLength && (data[index + 1] == '_' || char.IsLetter(data, index + 1))))
                 {
                     int tokenIndex = index;
                     if (data[index] == '@')
                         index++;
                     int origIndex = index;
                     index += char.IsSurrogate(data, index) ? 2 : 1;
-                    while (index < dataLength && char.IsLetterOrDigit(data, index))
+                    while (index < dataLength && (char.IsLetterOrDigit(data, index) || data[index] == '_'))
                         index += char.IsSurrogate(data, index) ? 2 : 1;
                     yield return new Token(data.Substring(origIndex, index - origIndex), TokenType.Identifier, tokenIndex);
                     goto ContinueDo;
@@ -249,8 +253,11 @@ namespace ParseCs
                         else
                             break;
                     }
+                    // The number cannot end with a '.', but you can have member access expressions after numbers, so make sure the '.' becomes a separate token.
+                    if (haveDot && data[index - 1] == '.')
+                        index--;
                     if (index < data.Length && ((!haveDot && !haveE && (data[index] == 'u' || data[index] == 'U' || data[index] == 'l' || data[index] == 'L'))
-                                                   || (data[index] == 'm' || data[index] == 'M' || data[index] == 'd' || data[index] == 'D' || data[index] == 'f' || data[index] == 'F')))
+                            || (data[index] == 'm' || data[index] == 'M' || data[index] == 'd' || data[index] == 'D' || data[index] == 'f' || data[index] == 'F')))
                     {
                         char first = data[index];
                         index++;
