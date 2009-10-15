@@ -13,7 +13,7 @@ namespace ParseCs
         {
             // string path = @"..\..\main\common\thirdparty";
             string path = @"..\..\users\timwi\ParseCs";
-            foreach (var f in Directory.GetFiles(PathUtil.AppPathCombine(path), "AssemblyInfo.cs", SearchOption.AllDirectories))
+            foreach (var f in Directory.GetFiles(PathUtil.AppPathCombine(path), "*.cs", SearchOption.AllDirectories))
             {
                 string source = File.ReadAllText(f);
                 try
@@ -24,8 +24,6 @@ namespace ParseCs
                     var taken = DateTime.Now - start;
                     File.WriteAllText(targetFile, result.ToString());
                     Console.WriteLine("{0} parsed successfully. ({1} bytes, {2} sec)".Fmt(f, new FileInfo(f).Length, taken.TotalSeconds));
-                    XmlClassify.SaveObjectToXmlFile(result, @"C:\temp\temp.xml");
-                    return;
                 }
                 catch (ParseException e)
                 {
