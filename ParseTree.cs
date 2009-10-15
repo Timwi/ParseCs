@@ -6,6 +6,7 @@ using RT.Util.Collections;
 using RT.Util.ExtensionMethods;
 using System.Text.RegularExpressions;
 using System.Diagnostics;
+using RT.Util.Xml;
 
 namespace ParseCs
 {
@@ -35,6 +36,7 @@ namespace ParseCs
         }
     }
 
+    [XmlIgnoreIfDefault, XmlIgnoreIfEmpty]
     public abstract class CsNode { }
 
     public class CsDocument : CsNode

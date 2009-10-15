@@ -3,6 +3,7 @@ using System.Linq;
 using System.IO;
 using RT.Util;
 using RT.Util.ExtensionMethods;
+using RT.Util.Xml;
 
 namespace ParseCs
 {
@@ -10,9 +11,9 @@ namespace ParseCs
     {
         static void Main(string[] args)
         {
-            string path = @"..\..\main\common\thirdparty";
-            // string path = @"..\..\users\timwi\ParseCs";
-            foreach (var f in Directory.GetFiles(PathUtil.AppPathCombine(path), "*.cs", SearchOption.AllDirectories))
+            // string path = @"..\..\main\common\thirdparty";
+            string path = @"..\..\users\timwi\ParseCs";
+            foreach (var f in Directory.GetFiles(PathUtil.AppPathCombine(path), "AssemblyInfo.cs", SearchOption.AllDirectories))
             {
                 string source = File.ReadAllText(f);
                 try
@@ -23,6 +24,8 @@ namespace ParseCs
                     var taken = DateTime.Now - start;
                     File.WriteAllText(targetFile, result.ToString());
                     Console.WriteLine("{0} parsed successfully. ({1} bytes, {2} sec)".Fmt(f, new FileInfo(f).Length, taken.TotalSeconds));
+                    XmlClassify.SaveObjectToXmlFile(result, @"C:\temp\temp.xml");
+                    return;
                 }
                 catch (ParseException e)
                 {
@@ -44,7 +47,7 @@ namespace ParseCs
                     }
 
                     int pos = cutSource.IndexOf('\n', index);
-                    int posBef = cutSource.LastIndexOf('\n', index - 1);
+                    int posBef = index == 0 ? -1 : cutSource.LastIndexOf('\n', index - 1);
                     Console.ForegroundColor = ConsoleColor.Gray;
                     Console.WriteLine(pos == -1 ? cutSource : cutSource.Substring(0, pos));
                     Console.ForegroundColor = ConsoleColor.Yellow;

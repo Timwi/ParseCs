@@ -54,4 +54,58 @@ namespace ParseCs
             return _type.ToString() + (_str != null ? ": " + _str : "");
         }
     }
+
+    public class TokenJar
+    {
+        private IEnumerator<Token> _enumerator;
+        private Token _endToken;
+
+        public TokenJar(IEnumerable<Token> enumerable, Token endToken)
+        {
+            _enumerator = enumerable.GetEnumerator();
+            _endToken = endToken;
+        }
+
+        private List<Token> _list;
+        public Token this[int index]
+        {
+            get
+            {
+                if (_list == null)
+                    _list = new List<Token>();
+                while (_list.Count <= index)
+                {
+                    if (!_enumerator.MoveNext())
+                        return _endToken;
+                    _list.Add(_enumerator.Current);
+                }
+                return _list[index];
+            }
+        }
+        public bool IndexExists(int index)
+        {
+            if (_list == null)
+                _list = new List<Token>();
+            if (_list.Count > index && _list[index].Type != TokenType.EndOfFile)
+                return true;
+            try
+            {
+                var token = this[index];
+                return token.Type != TokenType.EndOfFile;
+            }
+            catch (ParseException) { return false; }
+        }
+        public bool Has(char c, int index)
+        {
+            return this[index].Type == TokenType.Builtin && this[index].TokenStr[0] == c;
+        }
+        public void Split(int index)
+        {
+            var oldToken = this[index];
+            if (oldToken.TokenStr.Length < 2)
+                return;
+            _list.Insert(index + 1, new Token(oldToken.TokenStr.Substring(1), TokenType.Builtin, oldToken.Index + 1));
+            _list[index] = new Token(oldToken.TokenStr.Substring(0, 1), TokenType.Builtin, oldToken.Index);
+        }
+    }
 }

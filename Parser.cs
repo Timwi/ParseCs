@@ -19,12 +19,12 @@ namespace ParseCs
         /// <exception cref="ParseException">The specified C# source code could not be parsed.</exception>
         public static CsDocument Parse(string source)
         {
-            var tokens = Lexer.Lex(source, Lexer.LexOptions.IgnoreComments | Lexer.LexOptions.IgnorePreprocessorDirectives);
+            var tokens = Lexer.Lex(source, Lexer.LexOptions.IgnoreComments);
             int tokenIndex = 0;
-            return parseDocument(new tokenJar(tokens), ref tokenIndex);
+            return parseDocument(tokens, ref tokenIndex);
         }
 
-        private static CsDocument parseDocument(tokenJar tok, ref int i)
+        private static CsDocument parseDocument(TokenJar tok, ref int i)
         {
             var doc = new CsDocument();
             try
@@ -65,7 +65,7 @@ namespace ParseCs
             return doc;
         }
 
-        private static object parseMember(tokenJar tok, ref int i, bool returnAssemblyAndModuleCustomAttributes)
+        private static object parseMember(TokenJar tok, ref int i, bool returnAssemblyAndModuleCustomAttributes)
         {
             var customAttribs = new List<CsCustomAttributeGroup>();
             while (tok[i].IsBuiltin("["))
@@ -391,7 +391,7 @@ namespace ParseCs
             throw new ParseException("Unrecognized member. Field, property, event, method, constructor, destructor or nested type expected.", tok[i].Index);
         }
 
-        private static void parsePropertyBody(CsProperty prop, tokenJar tok, ref int i)
+        private static void parsePropertyBody(CsProperty prop, TokenJar tok, ref int i)
         {
             tok[i].Assert("{");
             i++;
@@ -428,7 +428,7 @@ namespace ParseCs
             i++;
         }
 
-        private static CsCustomAttributeGroup parseCustomAttributeGroup(tokenJar tok, ref int i, bool noNewLine)
+        private static CsCustomAttributeGroup parseCustomAttributeGroup(TokenJar tok, ref int i, bool noNewLine)
         {
             tok[i].Assert("[");
             i++;
@@ -514,7 +514,7 @@ namespace ParseCs
             return new CsCustomAttributeGroup { CustomAttributes = group, Location = loc, NoNewLine = noNewLine };
         }
 
-        private static CsBlock parseBlock(tokenJar tok, ref int i)
+        private static CsBlock parseBlock(TokenJar tok, ref int i)
         {
             tok[i].Assert("{");
             i++;
@@ -536,7 +536,7 @@ namespace ParseCs
             return block;
         }
 
-        private static void parseModifiers(CsMember mem, tokenJar tok, ref int i)
+        private static void parseModifiers(CsMember mem, TokenJar tok, ref int i)
         {
             while (true)
             {
@@ -588,7 +588,7 @@ namespace ParseCs
             }
         }
 
-        private static CsEvent parseEvent(tokenJar tok, ref int i)
+        private static CsEvent parseEvent(TokenJar tok, ref int i)
         {
             CsEvent ev = new CsEvent();
             parseModifiers(ev, tok, ref i);
@@ -648,7 +648,7 @@ namespace ParseCs
             return ev;
         }
 
-        private static CsUsing parseUsing(tokenJar tok, ref int i)
+        private static CsUsing parseUsing(TokenJar tok, ref int i)
         {
             tok[i].Assert("using");
             i++;
@@ -692,7 +692,7 @@ namespace ParseCs
             throw new ParseException("'=', '.' or ';' expected.", tok[i].Index);
         }
 
-        private static CsNamespace parseNamespace(tokenJar tok, ref int i)
+        private static CsNamespace parseNamespace(TokenJar tok, ref int i)
         {
             tok[i].Assert("namespace");
             i++;
@@ -748,7 +748,7 @@ namespace ParseCs
             return ns;
         }
 
-        private static CsType parseType(tokenJar tok, ref int i)
+        private static CsType parseType(TokenJar tok, ref int i)
         {
             bool isPublic = false;
             bool isProtected = false;
@@ -963,7 +963,7 @@ namespace ParseCs
             return type;
         }
 
-        private static Dictionary<string, List<CsGenericTypeConstraint>> parseGenericTypeConstraints(tokenJar tok, ref int i)
+        private static Dictionary<string, List<CsGenericTypeConstraint>> parseGenericTypeConstraints(TokenJar tok, ref int i)
         {
             var ret = new Dictionary<string, List<CsGenericTypeConstraint>>();
             while (tok[i].IsIdentifier("where"))
@@ -1018,7 +1018,7 @@ namespace ParseCs
             return ret;
         }
 
-        private static List<CsParameter> parseParameterList(tokenJar tok, ref int i)
+        private static List<CsParameter> parseParameterList(TokenJar tok, ref int i)
         {
             bool square = tok[i].IsBuiltin("[");
 
@@ -1052,7 +1052,7 @@ namespace ParseCs
             return ret;
         }
 
-        private static CsParameter parseParameter(tokenJar tok, ref int i)
+        private static CsParameter parseParameter(TokenJar tok, ref int i)
         {
             var customAttribs = new List<CsCustomAttributeGroup>();
             while (tok[i].IsBuiltin("["))
@@ -1085,7 +1085,7 @@ namespace ParseCs
             return new CsParameter { Type = type, Name = name, IsThis = isThis, IsOut = isOut, IsRef = isRef, IsParams = isParams, CustomAttributes = customAttribs };
         }
 
-        private static List<Tuple<string, List<CsCustomAttributeGroup>>> parseGenericTypeParameterList(tokenJar tok, ref int i)
+        private static List<Tuple<string, List<CsCustomAttributeGroup>>> parseGenericTypeParameterList(TokenJar tok, ref int i)
         {
             tok[i].Assert("<");
             var genericTypeParameters = new List<Tuple<string, List<CsCustomAttributeGroup>>>();
@@ -1120,7 +1120,7 @@ namespace ParseCs
 
         private static string[] builtinTypes = new[] { "bool", "byte", "char", "decimal", "double", "float", "int", "long", "object", "sbyte", "short", "string", "uint", "ulong", "ushort", "void" };
 
-        private static CsTypeIdentifier parseTypeIdentifier(tokenJar tok, ref int i, typeIdentifierFlags flags)
+        private static CsTypeIdentifier parseTypeIdentifier(TokenJar tok, ref int i, typeIdentifierFlags flags)
         {
             var ty = new CsConcreteTypeIdentifier();
             if (tok[i].IsIdentifier("global") && tok[i + 1].IsBuiltin("::"))
@@ -1250,7 +1250,7 @@ namespace ParseCs
             return ret;
         }
 
-        private static CsStatement parseStatement(tokenJar tok, ref int i)
+        private static CsStatement parseStatement(TokenJar tok, ref int i)
         {
             if (tok[i].IsBuiltin(";"))
             {
@@ -1668,7 +1668,7 @@ namespace ParseCs
             return stmt;
         }
 
-        private static CsStatement parseVariableDeclarationOrExpressionStatement(tokenJar tok, ref int i)
+        private static CsStatement parseVariableDeclarationOrExpressionStatement(TokenJar tok, ref int i)
         {
             // See if the beginning of this statement is a type identifier followed by a variable name, in which case parse it as a variable declaration.
             CsTypeIdentifier declType = null;
@@ -1736,7 +1736,7 @@ namespace ParseCs
 
         private static string[] assignmentOperators = new[] { "=", "*=", "/=", "%=", "+=", "-=", "<<=", ">>=", "&=", "^=", "|=" };
 
-        private static CsExpression parseExpression(tokenJar tok, ref int i)
+        private static CsExpression parseExpression(TokenJar tok, ref int i)
         {
             var left = parseExpressionConditional(tok, ref i);
             if (tok[i].Type == TokenType.Builtin && assignmentOperators.Contains(tok[i].TokenStr))
@@ -1763,7 +1763,7 @@ namespace ParseCs
             }
             return left;
         }
-        private static CsExpression parseExpressionConditional(tokenJar tok, ref int i)
+        private static CsExpression parseExpressionConditional(TokenJar tok, ref int i)
         {
             var left = parseExpressionCoaslesce(tok, ref i);
             bool haveQ = false;
@@ -1811,7 +1811,7 @@ namespace ParseCs
             }
             return left;
         }
-        private static CsExpression parseExpressionCoaslesce(tokenJar tok, ref int i)
+        private static CsExpression parseExpressionCoaslesce(TokenJar tok, ref int i)
         {
             var left = parseExpressionBoolOr(tok, ref i);
             while (tok[i].IsBuiltin("??"))
@@ -1827,7 +1827,7 @@ namespace ParseCs
             }
             return left;
         }
-        private static CsExpression parseExpressionBoolOr(tokenJar tok, ref int i)
+        private static CsExpression parseExpressionBoolOr(TokenJar tok, ref int i)
         {
             var left = parseExpressionBoolAnd(tok, ref i);
             while (tok[i].IsBuiltin("||"))
@@ -1843,7 +1843,7 @@ namespace ParseCs
             }
             return left;
         }
-        private static CsExpression parseExpressionBoolAnd(tokenJar tok, ref int i)
+        private static CsExpression parseExpressionBoolAnd(TokenJar tok, ref int i)
         {
             var left = parseExpressionLogicalOr(tok, ref i);
             while (tok[i].IsBuiltin("&&"))
@@ -1859,7 +1859,7 @@ namespace ParseCs
             }
             return left;
         }
-        private static CsExpression parseExpressionLogicalOr(tokenJar tok, ref int i)
+        private static CsExpression parseExpressionLogicalOr(TokenJar tok, ref int i)
         {
             var left = parseExpressionLogicalXor(tok, ref i);
             while (tok[i].IsBuiltin("|"))
@@ -1875,7 +1875,7 @@ namespace ParseCs
             }
             return left;
         }
-        private static CsExpression parseExpressionLogicalXor(tokenJar tok, ref int i)
+        private static CsExpression parseExpressionLogicalXor(TokenJar tok, ref int i)
         {
             var left = parseExpressionLogicalAnd(tok, ref i);
             while (tok[i].IsBuiltin("^"))
@@ -1891,7 +1891,7 @@ namespace ParseCs
             }
             return left;
         }
-        private static CsExpression parseExpressionLogicalAnd(tokenJar tok, ref int i)
+        private static CsExpression parseExpressionLogicalAnd(TokenJar tok, ref int i)
         {
             var left = parseExpressionEquality(tok, ref i);
             while (tok[i].IsBuiltin("&"))
@@ -1907,7 +1907,7 @@ namespace ParseCs
             }
             return left;
         }
-        private static CsExpression parseExpressionEquality(tokenJar tok, ref int i)
+        private static CsExpression parseExpressionEquality(TokenJar tok, ref int i)
         {
             var left = parseExpressionRelational(tok, ref i);
             while (tok[i].IsBuiltin("==") || tok[i].IsBuiltin("!="))
@@ -1924,7 +1924,7 @@ namespace ParseCs
             }
             return left;
         }
-        private static CsExpression parseExpressionRelational(tokenJar tok, ref int i)
+        private static CsExpression parseExpressionRelational(TokenJar tok, ref int i)
         {
             var left = parseExpressionShift(tok, ref i);
             while (tok[i].IsBuiltin("<") || tok[i].IsBuiltin(">") || tok[i].IsBuiltin("<=") || tok[i].IsBuiltin(">=") || tok[i].IsBuiltin("is") || tok[i].IsBuiltin("as"))
@@ -1956,7 +1956,7 @@ namespace ParseCs
             }
             return left;
         }
-        private static CsExpression parseExpressionShift(tokenJar tok, ref int i)
+        private static CsExpression parseExpressionShift(TokenJar tok, ref int i)
         {
             var left = parseExpressionAdditive(tok, ref i);
             while (tok[i].IsBuiltin("<<") || tok[i].IsBuiltin(">>"))
@@ -1973,7 +1973,7 @@ namespace ParseCs
             }
             return left;
         }
-        private static CsExpression parseExpressionAdditive(tokenJar tok, ref int i)
+        private static CsExpression parseExpressionAdditive(TokenJar tok, ref int i)
         {
             var left = parseExpressionMultiplicative(tok, ref i);
             while (tok[i].IsBuiltin("+") || tok[i].IsBuiltin("-"))
@@ -1990,7 +1990,7 @@ namespace ParseCs
             }
             return left;
         }
-        private static CsExpression parseExpressionMultiplicative(tokenJar tok, ref int i)
+        private static CsExpression parseExpressionMultiplicative(TokenJar tok, ref int i)
         {
             var left = parseExpressionUnary(tok, ref i);
             while (tok[i].IsBuiltin("*") || tok[i].IsBuiltin("/") || tok[i].IsBuiltin("%"))
@@ -2007,7 +2007,7 @@ namespace ParseCs
             }
             return left;
         }
-        private static CsExpression parseExpressionUnary(tokenJar tok, ref int i)
+        private static CsExpression parseExpressionUnary(TokenJar tok, ref int i)
         {
             if (tok[i].Type != TokenType.Builtin)
                 return parseExpressionPrimary(tok, ref i);
@@ -2030,7 +2030,7 @@ namespace ParseCs
             var operand = parseExpressionUnary(tok, ref i);
             return new CsUnaryOperatorExpression { Operand = operand, Operator = op };
         }
-        private static CsExpression parseExpressionPrimary(tokenJar tok, ref int i)
+        private static CsExpression parseExpressionPrimary(TokenJar tok, ref int i)
         {
             var left = parseExpressionIdentifierOrKeyword(tok, ref i);
             while (tok[i].IsBuiltin(".") || tok[i].IsBuiltin("(") || tok[i].IsBuiltin("[") || tok[i].IsBuiltin("++") || tok[i].IsBuiltin("--"))
@@ -2072,7 +2072,7 @@ namespace ParseCs
             return left;
         }
 
-        private static List<Tuple<ParameterType, CsExpression>> parseFunctionCall(tokenJar tok, ref int i, out bool isIndexer)
+        private static List<Tuple<ParameterType, CsExpression>> parseFunctionCall(TokenJar tok, ref int i, out bool isIndexer)
         {
             isIndexer = tok[i].IsBuiltin("[");
             if (!tok[i].IsBuiltin("(") && !tok[i].IsBuiltin("["))
@@ -2116,7 +2116,7 @@ namespace ParseCs
             i++;
             return parameters;
         }
-        private static CsExpression parseExpressionIdentifierOrKeyword(tokenJar tok, ref int i)
+        private static CsExpression parseExpressionIdentifierOrKeyword(TokenJar tok, ref int i)
         {
             if (tok[i].IsBuiltin("{"))
             {
@@ -2377,7 +2377,7 @@ namespace ParseCs
 
             return parseExpressionIdentifier(tok, ref i);
         }
-        private static void parseConstructorInitializer(CsNewConstructorExpression constructor, tokenJar tok, ref int i)
+        private static void parseConstructorInitializer(CsNewConstructorExpression constructor, TokenJar tok, ref int i)
         {
             tok[i].Assert("{");
             if (tok[i + 1].Type == TokenType.Identifier && tok[i + 2].IsIdentifier("="))
@@ -2401,7 +2401,7 @@ namespace ParseCs
                 }
             }
         }
-        private static CsExpression parseExpressionIdentifier(tokenJar tok, ref int i)
+        private static CsExpression parseExpressionIdentifier(TokenJar tok, ref int i)
         {
             // Check if this can be parsed as a type identifier. If it can't, don't throw; if it failed because of a malformed generic type parameter, it could still be a less-than operator instead.
             try
@@ -2418,7 +2418,7 @@ namespace ParseCs
             return ret;
         }
 
-        private static List<CsInitializer> parseInitializers(tokenJar tok, ref int i)
+        private static List<CsInitializer> parseInitializers(TokenJar tok, ref int i)
         {
             tok[i].Assert("{");
             i++;
@@ -2448,7 +2448,7 @@ namespace ParseCs
             i++;
             return list;
         }
-        private static List<CsExpression> parseArrayLiteral(tokenJar tok, ref int i)
+        private static List<CsExpression> parseArrayLiteral(TokenJar tok, ref int i)
         {
             tok[i].Assert("{");
             i++;
@@ -2471,62 +2471,6 @@ namespace ParseCs
             i++;
             return list;
         }
-
-        private class tokenJar
-        {
-            private IEnumerator<Token> _enumerator;
-            public tokenJar(IEnumerable<Token> enumerable) { _enumerator = enumerable.GetEnumerator(); }
-
-            private List<Token> _list;
-            public Token this[int index]
-            {
-                get
-                {
-                    if (_list == null)
-                        _list = new List<Token>();
-                    while (_list.Count <= index)
-                    {
-                        if (!_enumerator.MoveNext())
-                            return Lexer.EndToken;
-                        _list.Add(_enumerator.Current);
-                    }
-                    return _list[index];
-                }
-            }
-            public bool IndexExists(int index)
-            {
-                if (_list == null)
-                    _list = new List<Token>();
-                if (_list.Count > index && _list[index].Type != TokenType.EndOfFile)
-                    return true;
-                try
-                {
-                    var token = this[index];
-                    return token.Type != TokenType.EndOfFile;
-                }
-                catch (ParseException) { return false; }
-            }
-            public bool Has(char c, int index)
-            {
-                return this[index].Type == TokenType.Builtin && this[index].TokenStr[0] == c;
-            }
-            public void Split(int index)
-            {
-                var oldToken = this[index];
-                if (oldToken.TokenStr.Length < 2)
-                    return;
-                _list.Insert(index + 1, new Token(oldToken.TokenStr.Substring(1), TokenType.Builtin, oldToken.Index + 1));
-                _list[index] = new Token(oldToken.TokenStr.Substring(0, 1), TokenType.Builtin, oldToken.Index);
-            }
-        }
-    }
-
-    public class LexException : Exception
-    {
-        private int _index;
-        public LexException(string message, int index) : this(message, index, null) { }
-        public LexException(string message, int index, Exception inner) : base(message, inner) { _index = index; }
-        public int Index { get { return _index; } }
     }
 
     public class ParseException : Exception

@@ -4,6 +4,8 @@ using System.Linq;
 using System.Text;
 using RT.Util.ExtensionMethods;
 using System.Globalization;
+using System.Text.RegularExpressions;
+using RT.Util.Collections;
 
 namespace ParseCs
 {
@@ -40,21 +42,24 @@ namespace ParseCs
         };
 
         [Flags]
-        public enum LexOptions { IgnoreComments = 1, IgnorePreprocessorDirectives = 2 };
+        public enum LexOptions { IgnoreComments = 1 };
 
-        public static IEnumerable<Token> Lex(string data, LexOptions opt)
+        public static List<string> PreprocessorDirectives = new List<string>();
+
+        public static TokenJar Lex(string data, LexOptions opt)
         {
-            return Lex(data).Where(t =>
-                ((t.Type != TokenType.CommentSlashSlash && t.Type != TokenType.CommentSlashStar) || (opt & LexOptions.IgnoreComments) == 0) &&
-                (t.Type != TokenType.PreprocessorDirective || (opt & LexOptions.IgnorePreprocessorDirectives) == 0));
+            var endToken = new Token(null, TokenType.EndOfFile, data.Length);
+            return new TokenJar(preprocess(lex(data)).Where(t => ((t.Type != TokenType.CommentSlashSlash && t.Type != TokenType.CommentSlashStar) || (opt & LexOptions.IgnoreComments) == 0)), endToken);
         }
 
-        public static Token EndToken;
-
-        public static IEnumerable<Token> Lex(string data)
+        public static TokenJar Lex(string data)
         {
-            EndToken = new Token(null, TokenType.EndOfFile, data.Length);
+            var endToken = new Token(null, TokenType.EndOfFile, data.Length);
+            return new TokenJar(preprocess(lex(data)), endToken);
+        }
 
+        private static IEnumerable<Token> lex(string data)
+        {
             int index = 0;
             while (index < data.Length && char.IsWhiteSpace(data, index))
                 index += char.IsSurrogate(data, index) ? 2 : 1;
@@ -337,5 +342,66 @@ namespace ParseCs
                 i--;
             }
         }
+
+        private static IEnumerable<Token> preprocess(IEnumerable<Token> tok)
+        {
+            var openIfs = new Stack<bool>();
+            var openRegions = new Stack<string>();
+            int lastIndex = 0;
+
+            openIfs.Push(true); // act as if everything was wrapped in a big "#if TRUE"
+            foreach (var t in tok)
+            {
+                if (t.Type == TokenType.PreprocessorDirective)
+                {
+                    var cmd = t.TokenStr.Trim();
+                    Match m;
+                    if ((m = Regex.Match(cmd, @"^#if\s*!\s*")).Success)
+                        openIfs.Push(openIfs.Peek() && !PreprocessorDirectives.Contains(cmd.Substring(m.Length)));
+                    else if ((m = Regex.Match(cmd, @"^#if\s+")).Success)
+                        openIfs.Push(openIfs.Peek() && PreprocessorDirectives.Contains(cmd.Substring(m.Length)));
+                    else if (cmd == "#else")
+                    {
+                        var f = openIfs.Pop();
+                        openIfs.Push(openIfs.Peek() && !f);
+                    }
+                    else if (cmd == "#endif")
+                        openIfs.Pop();
+                    else if ((m = Regex.Match(cmd, @"^#region\s+")).Success)
+                        openRegions.Push(cmd.Substring(m.Length));
+                    else if (cmd == "#endregion" || (cmd.StartsWith("#endregion") && char.IsWhiteSpace(cmd, "#endregion".Length)))
+                        openRegions.Pop();
+                    else if (cmd == "#pragma" || (cmd.StartsWith("#pragma") && char.IsWhiteSpace(cmd, "#pragma".Length))
+                         || (cmd.StartsWith("#warning") && char.IsWhiteSpace(cmd, "#warning".Length))
+                         || (cmd.StartsWith("#error") && char.IsWhiteSpace(cmd, "#error".Length)))
+                    {
+                        // ignore these
+                    }
+                    else if ((m = Regex.Match(cmd, @"^#define\s+")).Success)
+                    {
+                        if (openIfs.Peek())
+                            PreprocessorDirectives.Add(cmd.Substring(m.Length));
+                    }
+                    else
+                        throw new LexException(@"Unknown preprocessor directive: " + cmd, t.Index);
+                }
+                else if (openIfs.Peek())
+                {
+                    yield return t;
+                }
+                lastIndex = t.Index;
+            }
+
+            if (openIfs.Count > 1)
+                throw new LexException(@"Unterminated #if directive.", lastIndex);
+        }
+    }
+
+    public class LexException : Exception
+    {
+        private int _index;
+        public LexException(string message, int index) : this(message, index, null) { }
+        public LexException(string message, int index, Exception inner) : base(message, inner) { _index = index; }
+        public int Index { get { return _index; } }
     }
 }
