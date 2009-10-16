@@ -311,6 +311,20 @@ namespace ParseCs
                         // the method name and generic type parameters as part of the parsed type identifier. We'll then have to remove it from there.
                         j--;
                         var ty = (CsConcreteTypeIdentifier) parseTypeIdentifier(tok, ref j, typeIdentifierFlags.Lenient);
+
+                        if (tok[j].IsBuiltin(".") && tok[j + 1].IsBuiltin("this"))
+                        {
+                            // It's an indexed property
+                            var prop = new CsIndexedProperty { Type = type, CustomAttributes = customAttribs, ImplementsFrom = ty };
+                            parseModifiers(prop, tok, ref i);
+                            i = j + 2;
+                            if (!tok[i].IsBuiltin("["))
+                                throw new ParseException("'[' expected.", tok[j].Index);
+                            prop.Parameters = parseParameterList(tok, ref i);
+                            parsePropertyBody(prop, tok, ref i);
+                            return prop;
+                        }
+
                         var lastPart = ty.Parts[ty.Parts.Count - 1];
                         ty.Parts.RemoveAt(ty.Parts.Count - 1);
                         if (lastPart.GenericTypeParameters != null)
@@ -1135,6 +1149,8 @@ namespace ParseCs
                 var part = new CsConcreteTypeIdentifierPart();
                 if (tok[j].Type == TokenType.Builtin && (flags & typeIdentifierFlags.AllowKeywords) == typeIdentifierFlags.AllowKeywords && builtinTypes.Contains(tok[j].TokenStr))
                     part.Name = tok[j].TokenStr;
+                else if (ty.Parts.Count > 0 && (flags & typeIdentifierFlags.Lenient) != 0 && tok[j].Type != TokenType.Identifier)
+                    return ty;
                 else
                     part.Name = tok[j].Identifier("Type expected.");
                 j++;

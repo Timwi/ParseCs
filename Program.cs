@@ -1,9 +1,8 @@
 ﻿using System;
-using System.Linq;
 using System.IO;
+using System.Linq;
 using RT.Util;
 using RT.Util.ExtensionMethods;
-using RT.Util.Xml;
 
 namespace ParseCs
 {

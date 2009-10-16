@@ -419,8 +419,7 @@ namespace ParseCs
         public List<CsSimpleMethod> Methods = new List<CsSimpleMethod>();
         public override string ToString()
         {
-            var sb = new StringBuilder();
-            sb.Append(modifiersCs());
+            var sb = modifiersCs();
             sb.Append(Type.ToString());
             sb.Append(' ');
             if (ImplementsFrom != null)
@@ -440,7 +439,20 @@ namespace ParseCs
         public List<CsParameter> Parameters;
         public override string ToString()
         {
-            return string.Concat(modifiersCs(), Type.ToString(), " this[", Parameters.Select(p => p.ToString()).JoinString(", "), "]\n{\n", Methods.Select(m => m.ToString()).JoinString().Indent(), "}\n");
+            var sb = modifiersCs();
+            sb.Append(Type.ToString());
+            sb.Append(' ');
+            if (ImplementsFrom != null)
+            {
+                sb.Append(ImplementsFrom.ToString());
+                sb.Append('.');
+            }
+            sb.Append("this[");
+            sb.Append(Parameters.Select(p => p.ToString()).JoinString(", "));
+            sb.Append("]\n{\n");
+            sb.Append(Methods.Select(m => m.ToString()).JoinString().Indent());
+            sb.Append("}\n");
+            return sb.ToString();
         }
     }
     public enum MethodType { Get, Set, Add, Remove };
@@ -746,8 +758,9 @@ namespace ParseCs
             var sb = new StringBuilder(gotoLabels());
             sb.Append("for (");
             if (InitializationStatement != null)
-                sb.Append(InitializationStatement.ToString());
-            sb.Append(';');
+                sb.Append(InitializationStatement.ToString().Trim());
+            else
+                sb.Append(';');
             if (TerminationCondition != null)
             {
                 sb.Append(' ');
