@@ -95,13 +95,14 @@ namespace ParseCs
             }
 
             var j = i;
-            var modifiers = new[] { "abstract", "const", "extern", "internal", "new", "override", "partial", "private", "protected", "public", "readonly", "sealed", "static", "unsafe", "virtual" };
+            var modifiers = new[] { "abstract", "const", "extern", "internal", "new", "override", "partial", "private", "protected", "public", "readonly", "sealed", "static", "unsafe", "virtual", "volatile" };
             while ((tok[j].Type == TokenType.Builtin || tok[j].Type == TokenType.Identifier) && modifiers.Contains(tok[j].TokenStr))
                 j++;
             if (tok[j].IsBuiltin("class") || tok[j].IsBuiltin("struct") || tok[j].IsBuiltin("interface") || tok[j].IsBuiltin("enum") || tok[j].IsBuiltin("delegate"))
             {
                 try
                 {
+#warning change this so that parseType() doesn't parse the modifiers (perhaps put it in here)
                     var ty = parseType(tok, ref i);
                     ty.CustomAttributes = customAttribs;
                     return ty;
@@ -118,27 +119,69 @@ namespace ParseCs
             }
             else if (tok[j].IsBuiltin("event"))
             {
+                CsEvent ev = new CsEvent { CustomAttributes = customAttribs };
+                parseModifiers(ev, tok, ref i);
+                if (i != j)
+                    throw new ParseException("The modifier '{0}' is not valid for events.".Fmt(tok[i].TokenStr), tok[i].Index);
+                i = j + 1;
+
+                ev.Type = parseTypeIdentifier(tok, ref i, typeIdentifierFlags.AllowArrays | typeIdentifierFlags.AllowKeywords | typeIdentifierFlags.AllowSuffixes);
+
+                string name = tok[i].Identifier();
+                i++;
+                if (tok[i].IsBuiltin("{"))
+                {
+                    throw new ParseException("Add/remove handlers not implemented.", tok[i].Index, ev);
+                }
+                CsExpression initializer = null;
+                bool canHaveCurly = true;
+                bool canHaveEquals = true;
+
                 try
                 {
-                    var ev = parseEvent(tok, ref i);
-                    ev.CustomAttributes = customAttribs;
-                    return ev;
+                    if (tok[i].IsBuiltin("="))
+                    {
+                        canHaveCurly = false;
+                        canHaveEquals = false;
+                        i++;
+                        initializer = parseExpression(tok, ref i);
+                    }
+                    ev.NamesAndInitializers.Add(Ut.Tuple(name, initializer));
+                    while (tok[i].IsBuiltin(","))
+                    {
+                        canHaveCurly = false;
+                        canHaveEquals = true;
+                        i++;
+                        name = tok[i].Identifier();
+                        initializer = null;
+                        i++;
+                        if (tok[i].IsBuiltin("="))
+                        {
+                            canHaveEquals = false;
+                            i++;
+                            initializer = parseExpression(tok, ref i);
+                        }
+                        ev.NamesAndInitializers.Add(Ut.Tuple(name, initializer));
+                    }
                 }
                 catch (ParseException e)
                 {
-                    if (e.IncompleteResult is CsEvent)
-                    {
-                        ((CsEvent) e.IncompleteResult).CustomAttributes = customAttribs;
-                        throw new ParseException(e.Message, e.Index, (CsEvent) e.IncompleteResult);
-                    }
-                    throw;
+                    if (e.IncompleteResult is CsExpression)
+                        ev.NamesAndInitializers.Add(Ut.Tuple(name, (CsExpression) e.IncompleteResult));
+                    throw new ParseException(e.Message, e.Index, ev);
                 }
+                if (!tok[i].IsBuiltin(";"))
+                    throw new ParseException(canHaveCurly ? (canHaveEquals ? "'{', '=', ',' or ';' expected." : "'{', ',' or ';' expected.") : (canHaveEquals ? "'=', ',' or ';' expected." : "',' or ';' expected."), tok[i].Index, ev);
+                i++;
+                return ev;
             }
             else if (tok[j].Type == TokenType.Identifier && tok[j + 1].IsBuiltin("("))
             {
                 // Looks like a constructor declaration
                 CsConstructor con = new CsConstructor { Name = tok[j].TokenStr, CustomAttributes = customAttribs };
                 parseModifiers(con, tok, ref i);
+                if (i != j)
+                    throw new ParseException("The modifier '{0}' is not valid for constructors.".Fmt(tok[i].TokenStr), tok[i].Index);
                 i = j + 1;
                 con.Parameters = parseParameterList(tok, ref i);
                 bool canHaveColon = true;
@@ -197,8 +240,10 @@ namespace ParseCs
             else if (tok[j].IsBuiltin("~") && tok[j + 1].Type == TokenType.Identifier && tok[j + 2].IsBuiltin("("))
             {
                 // Looks like a destructor declaration
-                CsDestructor des = new CsDestructor { Name = tok[j].TokenStr, CustomAttributes = customAttribs };
+                CsDestructor des = new CsDestructor { Name = tok[j + 1].TokenStr, CustomAttributes = customAttribs };
                 parseModifiers(des, tok, ref i);
+                if (i != j)
+                    throw new ParseException("The modifier '{0}' is not valid for destructors.".Fmt(tok[i].TokenStr), tok[i].Index);
                 i = j + 3;
                 if (!tok[i].IsBuiltin(")"))
                     throw new ParseException(@"Destructors cannot have any parameters.", tok[i].Index);
@@ -217,21 +262,137 @@ namespace ParseCs
                 }
                 return des;
             }
+            else if (tok[j].IsBuiltin("implicit") || tok[j].IsBuiltin("explicit"))
+            {
+                var op = new CsCastOperatorOverload { CastType = tok[j].IsBuiltin("implicit") ? CastOperatorType.Implicit : CastOperatorType.Explicit, CustomAttributes = customAttribs };
+                parseModifiers(op, tok, ref i);
+                if (i != j)
+                    throw new ParseException("The modifier '{0}' is not valid for {1} operator declarations.".Fmt(tok[i].TokenStr, tok[j].TokenStr), tok[i].Index);
+                i = j + 1;
+                if (!tok[i].IsBuiltin("operator"))
+                    throw new ParseException("'operator' expected.", tok[i].Index);
+                i++;
+                op.ReturnType = parseTypeIdentifier(tok, ref i, typeIdentifierFlags.AllowArrays | typeIdentifierFlags.AllowKeywords | typeIdentifierFlags.AllowSuffixes);
+                if (!tok[i].IsBuiltin("("))
+                    throw new ParseException("'(' expected.", tok[i].Index);
+                var parameters = parseParameterList(tok, ref i);
+                if (parameters.Count != 1)
+                    throw new ParseException("Implicit/explicit operators must have exactly one parameter.", tok[i].Index, op);
+                op.Parameter = parameters[0];
+                try { op.MethodBody = parseBlock(tok, ref i); }
+                catch (ParseException e)
+                {
+                    if (e.IncompleteResult is CsBlock)
+                        op.MethodBody = (CsBlock) e.IncompleteResult;
+                    throw new ParseException(e.Message, e.Index, op);
+                }
+                return op;
+            }
+            else if (tok[j].IsBuiltin("operator"))
+            {
+                throw new ParseException("You must specify either 'implicit operator', 'explicit operator', or a return type before the 'operator' keyword.", tok[j].Index);
+            }
             else
             {
-                // It could be a field, a method or a property
-                CsTypeIdentifier type = parseTypeIdentifier(tok, ref j, typeIdentifierFlags.AllowKeywords | typeIdentifierFlags.AllowSuffixes | typeIdentifierFlags.AllowArrays);
+                // It could be a field, a method, an operator overload or a property
+                var afterModifiers = j;
+                var prevIndex = tok[j].Index;
+                CsTypeIdentifier type;
+                try
+                {
+                    type = parseTypeIdentifier(tok, ref j, typeIdentifierFlags.AllowKeywords | typeIdentifierFlags.AllowSuffixes | typeIdentifierFlags.AllowArrays);
+                }
+                catch (ParseException e)
+                {
+                    if (e.Index == prevIndex)
+                        throw new ParseException("'class', 'struct', 'interface', 'enum', 'delegate', 'event', constructor or destructor declaration, 'implicit operator', 'explicit operator', or type expected.", tok[j].Index);
+                    throw;
+                }
+
                 if (tok[j].IsBuiltin("this"))
                 {
                     // Indexed property
                     var prop = new CsIndexedProperty { Type = type, CustomAttributes = customAttribs };
                     parseModifiers(prop, tok, ref i);
+                    if (i != afterModifiers)
+                        throw new ParseException("The modifier '{0}' is not valid for indexed properties.".Fmt(tok[i].TokenStr), tok[i].Index);
                     i = j + 1;
                     if (!tok[i].IsBuiltin("["))
                         throw new ParseException("'[' expected.", tok[j].Index);
                     prop.Parameters = parseParameterList(tok, ref i);
                     parsePropertyBody(prop, tok, ref i);
                     return prop;
+                }
+                else if (tok[j].IsBuiltin("operator"))
+                {
+                    // Operator overload (except implicit/explicit operator)
+                    j++;
+                    var overloadableOperators = new[] { "+", "-", "!", "~", "++", "--", "true", "false", "*", "/", "%", "&", "|", "^", "<<", ">>", "==", "!=", "<", ">", "<=", ">=" };
+                    if (tok[j].Type != TokenType.Builtin || !overloadableOperators.Contains(tok[j].TokenStr))
+                        throw new ParseException("Overloadable operator ({0}) expected.".Fmt(overloadableOperators.Select(o => "'" + o + "'").JoinString(", ")), tok[j].Index);
+                    string opStr = tok[j].TokenStr;
+                    j++;
+                    var parameters = parseParameterList(tok, ref j);
+                    CsOperatorOverload op;
+                    switch (parameters.Count)
+                    {
+                        case 1:
+                            UnaryOperator unop;
+                            switch (opStr)
+                            {
+                                case "+": unop = UnaryOperator.Plus; break;
+                                case "-": unop = UnaryOperator.Minus; break;
+                                case "!": unop = UnaryOperator.Not; break;
+                                case "~": unop = UnaryOperator.Neg; break;
+                                case "++": unop = UnaryOperator.PrefixInc; break;
+                                case "--": unop = UnaryOperator.PrefixDec; break;
+                                case "true": unop = UnaryOperator.True; break;
+                                case "false": unop = UnaryOperator.False; break;
+                                default: throw new ParseException("Binary operator must have two parameters. Overloadable unary operators are '+', '-', '!', '~', '++', '--', 'true' and 'false'.", tok[j].Index);
+                            }
+                            op = new CsUnaryOperatorOverload { CustomAttributes = customAttribs, Parameter = parameters[0], ReturnType = type, Operator = unop };
+                            break;
+
+                        case 2:
+                            BinaryOperator binop;
+                            switch (opStr)
+                            {
+                                case "+": binop = BinaryOperator.Plus; break;
+                                case "-": binop = BinaryOperator.Minus; break;
+                                case "*": binop = BinaryOperator.Times; break;
+                                case "/": binop = BinaryOperator.Div; break;
+                                case "%": binop = BinaryOperator.Mod; break;
+                                case "&": binop = BinaryOperator.And; break;
+                                case "|": binop = BinaryOperator.Or; break;
+                                case "^": binop = BinaryOperator.Xor; break;
+                                case "<<": binop = BinaryOperator.Shl; break;
+                                case ">>": binop = BinaryOperator.Shr; break;
+                                case "==": binop = BinaryOperator.Eq; break;
+                                case "!=": binop = BinaryOperator.NotEq; break;
+                                case "<": binop = BinaryOperator.Less; break;
+                                case ">": binop = BinaryOperator.Greater; break;
+                                case "<=": binop = BinaryOperator.LessEq; break;
+                                case ">=": binop = BinaryOperator.GreaterEq; break;
+                                default: throw new ParseException("Unary operator must have only one parameter. Overloadable binary operators are '+', '-', '*', '/', '%', '&', '|', '^', '<<', '>>', '==', '!=', '<', '>', '<=', and '>='.", tok[j].Index);
+                            }
+                            op = new CsBinaryOperatorOverload { CustomAttributes = customAttribs, Parameter = parameters[0], SecondParameter = parameters[1], ReturnType = type, Operator = binop };
+                            break;
+
+                        default:
+                            throw new ParseException("Overloadable operators must have exactly one or two parameters. Use one parameter for unary operators, two for binary operators.", tok[j].Index);
+                    }
+                    parseModifiers(op, tok, ref i);
+                    if (i != afterModifiers)
+                        throw new ParseException("The modifier '{0}' is not valid for operator overloads.".Fmt(tok[i].TokenStr), tok[i].Index);
+                    i = j;
+                    try { op.MethodBody = parseBlock(tok, ref i); }
+                    catch (ParseException e)
+                    {
+                        if (e.IncompleteResult is CsBlock)
+                            op.MethodBody = (CsBlock) e.IncompleteResult;
+                        throw new ParseException(e.Message, e.Index, op);
+                    }
+                    return op;
                 }
 
                 string name = tok[j].Identifier("Identifier or 'this' expected.");
@@ -241,6 +402,8 @@ namespace ParseCs
                 {
                     var prop = new CsProperty { Type = type, Name = name, CustomAttributes = customAttribs };
                     parseModifiers(prop, tok, ref i);
+                    if (i != afterModifiers)
+                        throw new ParseException("The modifier '{0}' is not valid for properties.".Fmt(tok[i].TokenStr), tok[i].Index);
                     i = j;
                     parsePropertyBody(prop, tok, ref i);
                     return prop;
@@ -249,6 +412,8 @@ namespace ParseCs
                 {
                     CsField fi = new CsField { Type = type, CustomAttributes = customAttribs };
                     parseModifiers(fi, tok, ref i);
+                    if (i != afterModifiers)
+                        throw new ParseException("The modifier '{0}' is not valid for fields.".Fmt(tok[i].TokenStr), tok[i].Index);
                     i = j;
                     CsExpression initializer = null;
                     try
@@ -317,6 +482,8 @@ namespace ParseCs
                             // It's an indexed property
                             var prop = new CsIndexedProperty { Type = type, CustomAttributes = customAttribs, ImplementsFrom = ty };
                             parseModifiers(prop, tok, ref i);
+                            if (i != afterModifiers)
+                                throw new ParseException("The modifier '{0}' is not valid for indexed properties.".Fmt(tok[i].TokenStr), tok[i].Index);
                             i = j + 2;
                             if (!tok[i].IsBuiltin("["))
                                 throw new ParseException("'[' expected.", tok[j].Index);
@@ -351,6 +518,8 @@ namespace ParseCs
                                 throw new ParseException(@"Properties cannot be generic.", tok[j].Index);
                             var prop = new CsProperty { Type = type, Name = name, CustomAttributes = customAttribs, ImplementsFrom = implementsFrom };
                             parseModifiers(prop, tok, ref i);
+                            if (i != afterModifiers)
+                                throw new ParseException("The modifier '{0}' is not valid for properties.".Fmt(tok[i].TokenStr), tok[i].Index);
                             i = j;
                             parsePropertyBody(prop, tok, ref i);
                             return prop;
@@ -358,6 +527,8 @@ namespace ParseCs
                     }
                     CsMethod meth = new CsMethod { Type = type, Name = name, CustomAttributes = customAttribs, ImplementsFrom = implementsFrom };
                     parseModifiers(meth, tok, ref i);
+                    if (i != afterModifiers)
+                        throw new ParseException("The modifier '{0}' is not valid for methods.".Fmt(tok[i].TokenStr), tok[i].Index);
                     i = j;
                     if (genericsAlreadyParsed != null)
                         meth.GenericTypeParameters = genericsAlreadyParsed;
@@ -401,8 +572,6 @@ namespace ParseCs
                 else
                     throw new ParseException("For a field, '=', ',' or ';' expected. For a method, '(' or '<' expected. For a property, '{' expected.", tok[j].Index);
             }
-
-            throw new ParseException("Unrecognized member. Field, property, event, method, constructor, destructor or nested type expected.", tok[i].Index);
         }
 
         private static void parsePropertyBody(CsProperty prop, TokenJar tok, ref int i)
@@ -562,6 +731,8 @@ namespace ParseCs
                     mem.IsPrivate = true;
                 else if (tok[i].IsBuiltin("internal"))
                     mem.IsInternal = true;
+                else if (tok[i].IsBuiltin("new"))
+                    mem.IsNew = true;
                 else if (tok[i].IsBuiltin("static") && mem is CsMemberLevel2)
                     ((CsMemberLevel2) mem).IsStatic = true;
                 else if (tok[i].IsBuiltin("abstract") && mem is CsMemberLevel2)
@@ -574,92 +745,36 @@ namespace ParseCs
                     ((CsMemberLevel2) mem).IsOverride = true;
                 else if (tok[i].IsBuiltin("static") && mem is CsMultiMember)
                     ((CsMultiMember) mem).IsStatic = true;
-                else if (tok[i].IsBuiltin("abstract") && mem is CsMultiMember)
-                    ((CsMultiMember) mem).IsAbstract = true;
-                else if (tok[i].IsBuiltin("sealed") && mem is CsMultiMember)
-                    ((CsMultiMember) mem).IsSealed = true;
-                else if (tok[i].IsBuiltin("virtual") && mem is CsMultiMember)
-                    ((CsMultiMember) mem).IsVirtual = true;
-                else if (tok[i].IsBuiltin("override") && mem is CsMultiMember)
-                    ((CsMultiMember) mem).IsOverride = true;
+                else if (tok[i].IsBuiltin("abstract") && mem is CsEvent)
+                    ((CsEvent) mem).IsAbstract = true;
+                else if (tok[i].IsBuiltin("sealed") && mem is CsEvent)
+                    ((CsEvent) mem).IsSealed = true;
+                else if (tok[i].IsBuiltin("virtual") && mem is CsEvent)
+                    ((CsEvent) mem).IsVirtual = true;
+                else if (tok[i].IsBuiltin("override") && mem is CsEvent)
+                    ((CsEvent) mem).IsOverride = true;
                 else if (tok[i].IsBuiltin("readonly") && mem is CsField)
                     ((CsField) mem).IsReadonly = true;
                 else if (tok[i].IsBuiltin("const") && mem is CsField)
                     ((CsField) mem).IsConst = true;
-                else if (tok[i].IsBuiltin("extern") && mem is CsMethod)
-                    ((CsMethod) mem).IsExtern = true;
-                else if (tok[i].IsBuiltin("unsafe") && mem is CsMethod)
-                    ((CsMethod) mem).IsUnsafe = true;
+                else if (tok[i].IsIdentifier("partial") && mem is CsMethod)
+                    ((CsMethod) mem).IsPartial = true;
+                else if (tok[i].IsBuiltin("extern") && mem is CsMemberLevel2)
+                    ((CsMemberLevel2) mem).IsExtern = true;
+                else if (tok[i].IsBuiltin("unsafe") && mem is CsMemberLevel2)
+                    ((CsMemberLevel2) mem).IsUnsafe = true;
                 else if (tok[i].IsBuiltin("unsafe") && mem is CsDelegate)
                     ((CsDelegate) mem).IsUnsafe = true;
                 else if (tok[i].IsIdentifier("partial") && mem is CsTypeLevel2)
                     ((CsTypeLevel2) mem).IsPartial = true;
-                else if (tok[i].IsIdentifier("new") && mem is CsType)
-                    ((CsType) mem).IsNew = true;
+                else if (tok[i].IsBuiltin("static") && mem is CsOperatorOverload)
+                    ((CsOperatorOverload) mem).IsStatic = true;
+                else if (tok[i].IsBuiltin("static") && mem is CsConstructor)
+                    ((CsConstructor) mem).IsStatic = true;
                 else
                     break;
                 i++;
             }
-        }
-
-        private static CsEvent parseEvent(TokenJar tok, ref int i)
-        {
-            CsEvent ev = new CsEvent();
-            parseModifiers(ev, tok, ref i);
-
-            tok[i].Assert("event");
-            i++;
-
-            ev.Type = parseTypeIdentifier(tok, ref i, typeIdentifierFlags.AllowArrays | typeIdentifierFlags.AllowKeywords | typeIdentifierFlags.AllowSuffixes);
-
-            string name = tok[i].Identifier();
-            i++;
-            if (tok[i].IsBuiltin("{"))
-            {
-                throw new ParseException("Add/remove handlers not implemented.", tok[i].Index, ev);
-                return ev;
-            }
-            CsExpression initializer = null;
-            bool canHaveCurly = true;
-            bool canHaveEquals = true;
-
-            try
-            {
-                if (tok[i].IsBuiltin("="))
-                {
-                    canHaveCurly = false;
-                    canHaveEquals = false;
-                    i++;
-                    initializer = parseExpression(tok, ref i);
-                }
-                ev.NamesAndInitializers.Add(Ut.Tuple(name, initializer));
-                while (tok[i].IsBuiltin(","))
-                {
-                    canHaveCurly = false;
-                    canHaveEquals = true;
-                    i++;
-                    name = tok[i].Identifier();
-                    initializer = null;
-                    i++;
-                    if (tok[i].IsBuiltin("="))
-                    {
-                        canHaveEquals = false;
-                        i++;
-                        initializer = parseExpression(tok, ref i);
-                    }
-                    ev.NamesAndInitializers.Add(Ut.Tuple(name, initializer));
-                }
-            }
-            catch (ParseException e)
-            {
-                if (e.IncompleteResult is CsExpression)
-                    ev.NamesAndInitializers.Add(Ut.Tuple(name, (CsExpression) e.IncompleteResult));
-                throw new ParseException(e.Message, e.Index, ev);
-            }
-            if (!tok[i].IsBuiltin(";"))
-                throw new ParseException(canHaveCurly ? (canHaveEquals ? "'{', '=', ',' or ';' expected." : "'{', ',' or ';' expected.") : (canHaveEquals ? "'=', ',' or ';' expected." : "',' or ';' expected."), tok[i].Index, ev);
-            i++;
-            return ev;
         }
 
         private static CsUsing parseUsing(TokenJar tok, ref int i)
@@ -1686,6 +1801,14 @@ namespace ParseCs
 
         private static CsStatement parseVariableDeclarationOrExpressionStatement(TokenJar tok, ref int i)
         {
+            bool isConst = false;
+
+            if (tok[i].IsBuiltin("const"))
+            {
+                isConst = true;
+                i++;
+            }
+
             // See if the beginning of this statement is a type identifier followed by a variable name, in which case parse it as a variable declaration.
             CsTypeIdentifier declType = null;
             var j = i;
@@ -1701,7 +1824,7 @@ namespace ParseCs
             if (declType != null)
             {
                 i = j - 1;
-                var decl = new CsVariableDeclarationStatement { Type = declType };
+                var decl = new CsVariableDeclarationStatement { Type = declType, IsConst = isConst };
                 string name = null;
                 try
                 {
@@ -1730,6 +1853,9 @@ namespace ParseCs
                 // This function does not consume the trailing ';' of the statement, so that 'using' can use it (where the statement ends with a ')' instead).
                 return decl;
             }
+
+            if (isConst)
+                throw new ParseException("Expected type + variable declaration after 'const'.", tok[i].Index);
 
             // Finally, the only remaining possible way for it to be a valid statement is by being an expression.
             var exprStat = new CsExpressionStatement();
@@ -2288,6 +2414,13 @@ namespace ParseCs
                     else
                         throw new ParseException("'(', '[' or '{' expected.", tok[i].Index);
                 }
+            }
+
+            if (tok[i].IsBuiltin("delegate"))
+            {
+                i++;
+                var delegateParams = parseParameterList(tok, ref i);
+                return new CsAnonymousMethodExpression { Block = parseBlock(tok, ref i), Parameters = delegateParams };
             }
 
             List<string> parameters = null;
