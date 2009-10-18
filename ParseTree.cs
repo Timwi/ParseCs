@@ -54,7 +54,8 @@ namespace ParseCs
                 op == BinaryOperator.Xor ? "^" :
                 op == BinaryOperator.Or ? "|" :
                 op == BinaryOperator.AndAnd ? "&&" :
-                op == BinaryOperator.OrOr ? "||" : null;
+                op == BinaryOperator.OrOr ? "||" :
+                op == BinaryOperator.Coalesce ? "??" : null;
         }
         public static string ToCs(this UnaryOperator op)
         {
@@ -83,6 +84,7 @@ namespace ParseCs
     [XmlIgnoreIfDefault, XmlIgnoreIfEmpty]
     public abstract class CsNode { }
 
+    #region Document & Namespace
     public class CsDocument : CsNode
     {
         public List<CsUsingNamespace> UsingNamespaces = new List<CsUsingNamespace>();
@@ -129,7 +131,6 @@ namespace ParseCs
             return sb.ToString();
         }
     }
-
     public abstract class CsUsing : CsNode { }
     public class CsUsingNamespace : CsUsing
     {
@@ -142,7 +143,6 @@ namespace ParseCs
         public CsTypeIdentifier Original;
         public override string ToString() { return "using " + Alias.Sanitize() + " = " + Original.ToString() + ";\n"; }
     }
-
     public class CsNamespace : CsNode
     {
         public string Name;
@@ -188,11 +188,13 @@ namespace ParseCs
             return sb.ToString();
         }
     }
+    #endregion
 
+    #region Members, except types
     public abstract class CsMember : CsNode
     {
         public List<CsCustomAttributeGroup> CustomAttributes;
-        public bool IsInternal, IsPrivate, IsProtected, IsPublic, IsNew;
+        public bool IsInternal, IsPrivate, IsProtected, IsPublic, IsNew, IsUnsafe;
         protected virtual StringBuilder modifiersCs()
         {
             var sb = new StringBuilder(CustomAttributes.Select(c => c.ToString()).JoinString());
@@ -201,10 +203,10 @@ namespace ParseCs
             if (IsPrivate) sb.Append("private ");
             if (IsPublic) sb.Append("public ");
             if (IsNew) sb.Append("new ");
+            if (IsUnsafe) sb.Append("unsafe ");
             return sb;
         }
     }
-
     public abstract class CsMultiMember : CsMember
     {
         public CsTypeIdentifier Type;
@@ -219,163 +221,11 @@ namespace ParseCs
             return sb;
         }
     }
-
-    public abstract class CsType : CsMember
-    {
-        public string Name;
-    }
-    public abstract class CsTypeCanBeGeneric : CsType
-    {
-        public List<Tuple<string, List<CsCustomAttributeGroup>>> GenericTypeParameters = null;
-        public Dictionary<string, List<CsGenericTypeConstraint>> GenericTypeConstraints = null;
-
-        protected string genericTypeParametersCs()
-        {
-            if (GenericTypeParameters == null)
-                return string.Empty;
-            return string.Concat("<", GenericTypeParameters.Select(g => g.E2.Select(ca => ca.ToString()).JoinString() + g.E1.Sanitize()).JoinString(", "), ">");
-        }
-
-        protected string genericTypeConstraintsCs()
-        {
-            if (GenericTypeConstraints == null)
-                return string.Empty;
-            return GenericTypeConstraints.Select(kvp => " where " + kvp.Key.Sanitize() + " : " + kvp.Value.Select(c => c.ToString()).JoinString(", ")).JoinString();
-        }
-    }
-    public abstract class CsTypeLevel2 : CsTypeCanBeGeneric
-    {
-        public bool IsPartial;
-
-        public List<CsTypeIdentifier> BaseTypes = null;
-        public List<CsMember> Members = new List<CsMember>();
-
-        protected abstract string typeTypeCs { get; }
-        protected override StringBuilder modifiersCs()
-        {
-            var sb = base.modifiersCs();
-            if (IsPartial) sb.Append("partial ");
-            return sb;
-        }
-        public override string ToString()
-        {
-            var sb = modifiersCs();
-            sb.Append(typeTypeCs);
-            sb.Append(' ');
-            sb.Append(Name.Sanitize());
-            sb.Append(genericTypeParametersCs());
-            if (BaseTypes != null && BaseTypes.Any())
-            {
-                sb.Append(" : ");
-                sb.Append(BaseTypes.Select(ty => ty.ToString()).JoinString(", "));
-            }
-            sb.Append(genericTypeConstraintsCs());
-            if (Members.Count == 0)
-                sb.Append(" { }\n");
-            else
-            {
-                sb.Append("\n{\n");
-                CsMember prevMember = null;
-                foreach (var member in Members)
-                {
-                    if (prevMember != null && (!(member is CsField) || !(prevMember is CsField)))
-                        sb.Append('\n');
-                    sb.Append(member.ToString().Indent());
-                    prevMember = member;
-                }
-                sb.Append("}\n");
-            }
-            return sb.ToString();
-        }
-    }
-    public class CsInterface : CsTypeLevel2
-    {
-        protected override string typeTypeCs { get { return "interface"; } }
-    }
-    public class CsStruct : CsTypeLevel2
-    {
-        protected override string typeTypeCs { get { return "struct"; } }
-    }
-    public class CsClass : CsTypeLevel2
-    {
-        public bool IsAbstract, IsSealed, IsStatic;
-
-        protected override string typeTypeCs { get { return "class"; } }
-        protected override StringBuilder modifiersCs()
-        {
-            var sb = base.modifiersCs();
-            if (IsAbstract) sb.Append("abstract ");
-            if (IsSealed) sb.Append("sealed ");
-            if (IsStatic) sb.Append("static ");
-            return sb;
-        }
-    }
-    public class CsDelegate : CsTypeCanBeGeneric
-    {
-        public CsTypeIdentifier ReturnType;
-        public List<CsParameter> Parameters = new List<CsParameter>();
-        public bool IsUnsafe;
-        public override string ToString()
-        {
-            var sb = modifiersCs();
-            if (IsUnsafe) sb.Append("unsafe ");
-            sb.Append("delegate ");
-            sb.Append(ReturnType.ToString());
-            sb.Append(' ');
-            sb.Append(Name.Sanitize());
-            sb.Append(genericTypeParametersCs());
-            sb.Append('(');
-            sb.Append(Parameters.Select(p => p.ToString()).JoinString(", "));
-            sb.Append(')');
-            sb.Append(genericTypeConstraintsCs());
-            sb.Append(";\n");
-            return sb.ToString();
-        }
-    }
-    public class CsEnum : CsType
-    {
-        public CsTypeIdentifier BaseType;
-        public List<CsEnumValue> EnumValues = new List<CsEnumValue>();
-        public override string ToString()
-        {
-            var sb = modifiersCs();
-            sb.Append("enum ");
-            sb.Append(Name.Sanitize());
-            if (!EnumValues.Any())
-            {
-                sb.Append(" { }\n");
-                return sb.ToString();
-            }
-            sb.Append("\n{\n");
-            sb.Append(EnumValues.Select(ev => ev.ToString()).JoinString().Indent());
-            sb.Remove(sb.Length - 2, 1);  // remove the last comma from the last enum value
-            sb.Append("}\n");
-            return sb.ToString();
-        }
-    }
-    public class CsEnumValue : CsNode
-    {
-        public List<CsCustomAttributeGroup> CustomAttributes;
-        public string Name;
-        public CsExpression LiteralValue;
-        public override string ToString()
-        {
-            var sb = new StringBuilder(CustomAttributes.Select(c => c.ToString()).JoinString());
-            sb.Append(Name.Sanitize());
-            if (LiteralValue != null)
-            {
-                sb.Append(" = ");
-                sb.Append(LiteralValue.ToString());
-            }
-            sb.Append(",\n");
-            return sb.ToString();
-        }
-    }
     public abstract class CsMemberLevel2 : CsMember
     {
         public string Name;
         public CsTypeIdentifier ImplementsFrom;
-        public bool IsAbstract, IsVirtual, IsOverride, IsSealed, IsStatic, IsExtern, IsUnsafe;
+        public bool IsAbstract, IsVirtual, IsOverride, IsSealed, IsStatic, IsExtern;
 
         public CsTypeIdentifier Type;  // for methods, this is the return type
 
@@ -388,14 +238,13 @@ namespace ParseCs
             if (IsSealed) sb.Append("sealed ");
             if (IsStatic) sb.Append("static ");
             if (IsExtern) sb.Append("extern ");
-            if (IsUnsafe) sb.Append("unsafe ");
             return sb;
         }
     }
     public class CsEvent : CsMultiMember
     {
         public bool IsAbstract, IsVirtual, IsOverride, IsSealed;
-#warning TODO: 'Add' and 'remove' handlers
+        public List<CsSimpleMethod> Methods;
 
         public override string ToString()
         {
@@ -419,11 +268,14 @@ namespace ParseCs
                     sb.Append(tuple.E2.ToString());
                 }
             }
-#warning TODO: 'Add' and 'remove' handlers
-            // if(add_and_remove_handlers) {
-            // sb.Append("{\n" ........);
-            // } else
-            sb.Append(";\n");
+            if (Methods != null)
+            {
+                sb.Append("\n{\n");
+                sb.Append(Methods.Select(m => m.ToString()).JoinString().Indent());
+                sb.Append("}\n");
+            }
+            else
+                sb.Append(";\n");
             return sb.ToString();
         }
     }
@@ -675,41 +527,211 @@ namespace ParseCs
             return sb.ToString();
         }
     }
+    #endregion
 
-    public class CsParameter : CsNode
+    #region Types
+    public abstract class CsType : CsMember
+    {
+        public string Name;
+    }
+    public abstract class CsTypeCanBeGeneric : CsType
+    {
+        public List<Tuple<string, List<CsCustomAttributeGroup>>> GenericTypeParameters = null;
+        public Dictionary<string, List<CsGenericTypeConstraint>> GenericTypeConstraints = null;
+
+        protected string genericTypeParametersCs()
+        {
+            if (GenericTypeParameters == null)
+                return string.Empty;
+            return string.Concat("<", GenericTypeParameters.Select(g => g.E2.Select(ca => ca.ToString()).JoinString() + g.E1.Sanitize()).JoinString(", "), ">");
+        }
+
+        protected string genericTypeConstraintsCs()
+        {
+            if (GenericTypeConstraints == null)
+                return string.Empty;
+            return GenericTypeConstraints.Select(kvp => " where " + kvp.Key.Sanitize() + " : " + kvp.Value.Select(c => c.ToString()).JoinString(", ")).JoinString();
+        }
+    }
+    public abstract class CsTypeLevel2 : CsTypeCanBeGeneric
+    {
+        public bool IsPartial;
+
+        public List<CsTypeIdentifier> BaseTypes = null;
+        public List<CsMember> Members = new List<CsMember>();
+
+        protected abstract string typeTypeCs { get; }
+        protected override StringBuilder modifiersCs()
+        {
+            var sb = base.modifiersCs();
+            if (IsPartial) sb.Append("partial ");
+            return sb;
+        }
+        public override string ToString()
+        {
+            var sb = modifiersCs();
+            sb.Append(typeTypeCs);
+            sb.Append(' ');
+            sb.Append(Name.Sanitize());
+            sb.Append(genericTypeParametersCs());
+            if (BaseTypes != null && BaseTypes.Any())
+            {
+                sb.Append(" : ");
+                sb.Append(BaseTypes.Select(ty => ty.ToString()).JoinString(", "));
+            }
+            sb.Append(genericTypeConstraintsCs());
+            if (Members.Count == 0)
+                sb.Append(" { }\n");
+            else
+            {
+                sb.Append("\n{\n");
+                CsMember prevMember = null;
+                foreach (var member in Members)
+                {
+                    if (prevMember != null && (!(member is CsField) || !(prevMember is CsField)))
+                        sb.Append('\n');
+                    sb.Append(member.ToString().Indent());
+                    prevMember = member;
+                }
+                sb.Append("}\n");
+            }
+            return sb.ToString();
+        }
+    }
+    public class CsInterface : CsTypeLevel2
+    {
+        protected override string typeTypeCs { get { return "interface"; } }
+    }
+    public class CsStruct : CsTypeLevel2
+    {
+        protected override string typeTypeCs { get { return "struct"; } }
+    }
+    public class CsClass : CsTypeLevel2
+    {
+        public bool IsAbstract, IsSealed, IsStatic;
+
+        protected override string typeTypeCs { get { return "class"; } }
+        protected override StringBuilder modifiersCs()
+        {
+            var sb = base.modifiersCs();
+            if (IsAbstract) sb.Append("abstract ");
+            if (IsSealed) sb.Append("sealed ");
+            if (IsStatic) sb.Append("static ");
+            return sb;
+        }
+    }
+    public class CsDelegate : CsTypeCanBeGeneric
+    {
+        public CsTypeIdentifier ReturnType;
+        public List<CsParameter> Parameters = new List<CsParameter>();
+        public override string ToString()
+        {
+            var sb = modifiersCs();
+            sb.Append("delegate ");
+            sb.Append(ReturnType.ToString());
+            sb.Append(' ');
+            sb.Append(Name.Sanitize());
+            sb.Append(genericTypeParametersCs());
+            sb.Append('(');
+            sb.Append(Parameters.Select(p => p.ToString()).JoinString(", "));
+            sb.Append(')');
+            sb.Append(genericTypeConstraintsCs());
+            sb.Append(";\n");
+            return sb.ToString();
+        }
+    }
+    public class CsEnum : CsType
+    {
+        public CsTypeIdentifier BaseType;
+        public List<CsEnumValue> EnumValues = new List<CsEnumValue>();
+        public override string ToString()
+        {
+            var sb = modifiersCs();
+            sb.Append("enum ");
+            sb.Append(Name.Sanitize());
+            if (!EnumValues.Any())
+            {
+                sb.Append(" { }\n");
+                return sb.ToString();
+            }
+            sb.Append("\n{\n");
+            sb.Append(EnumValues.Select(ev => ev.ToString()).JoinString().Indent());
+            sb.Remove(sb.Length - 2, 1);  // remove the last comma from the last enum value
+            sb.Append("}\n");
+            return sb.ToString();
+        }
+    }
+    public class CsEnumValue : CsNode
     {
         public List<CsCustomAttributeGroup> CustomAttributes;
+        public string Name;
+        public CsExpression LiteralValue;
+        public override string ToString()
+        {
+            var sb = new StringBuilder(CustomAttributes.Select(c => c.ToString()).JoinString());
+            sb.Append(Name.Sanitize());
+            if (LiteralValue != null)
+            {
+                sb.Append(" = ");
+                sb.Append(LiteralValue.ToString());
+            }
+            sb.Append(",\n");
+            return sb.ToString();
+        }
+    }
+    #endregion
+
+    #region Parameters and type identifiers
+    public class CsParameter : CsNode
+    {
+        public List<CsCustomAttributeGroup> CustomAttributes = new List<CsCustomAttributeGroup>();
         public CsTypeIdentifier Type;
         public string Name;
         public bool IsThis, IsOut, IsRef, IsParams;
         public override string ToString()
         {
-            return string.Concat(CustomAttributes.Select(c => c.ToString()).JoinString(), IsThis ? "this " : string.Empty, IsParams ? "params " : string.Empty, IsOut ? "out " : string.Empty, IsRef ? "ref " : string.Empty, Type.ToString(), " ", Name.Sanitize());
+            // If 'Type' is null, this is a parameter to a lambda expression where the type is not specified.
+            if (Type == null)
+                return Name.Sanitize();
+
+            var sb = new StringBuilder(CustomAttributes.Select(c => c.ToString()).JoinString());
+            if (IsThis) sb.Append("this ");
+            if (IsParams) sb.Append("params ");
+            if (IsOut) sb.Append("out ");
+            if (IsRef) sb.Append("ref ");
+            sb.Append(Type.ToString());
+            sb.Append(' ');
+            sb.Append(Name.Sanitize());
+            return sb.ToString();
         }
     }
-
     public abstract class CsTypeIdentifier : CsNode
     {
         public abstract bool IsSingleIdentifier();
     }
-
     public class CsEmptyGenericTypeIdentifier : CsTypeIdentifier
     {
         public override string ToString() { return string.Empty; }
         public override bool IsSingleIdentifier() { return false; }
     }
-    public class CsConcreteTypeIdentifierPart : CsNode
+    public abstract class CsConcreteTypeIdentifierPart : CsNode { }
+    public class CsConcreteTypeIdentifierPartIdentifier : CsConcreteTypeIdentifierPart
     {
         public string Name;
         public List<CsTypeIdentifier> GenericTypeParameters = null;
         public override string ToString() { return GenericTypeParameters == null ? Name.Sanitize() : string.Concat(Name.Sanitize(), '<', GenericTypeParameters.Select(p => p.ToString()).JoinString(", "), '>'); }
+    }
+    public class CsConcreteTypeIdentifierPartBuiltin : CsConcreteTypeIdentifierPart
+    {
+        public string Builtin;
+        public override string ToString() { return Builtin; }
     }
     public class CsConcreteTypeIdentifier : CsTypeIdentifier
     {
         public bool HasGlobal;
         public List<CsConcreteTypeIdentifierPart> Parts = new List<CsConcreteTypeIdentifierPart>();
         public override string ToString() { return (HasGlobal ? "global::" : string.Empty) + Parts.Select(p => p.ToString()).JoinString("."); }
-        public override bool IsSingleIdentifier() { return !HasGlobal && Parts.Count == 1 && Parts[0].GenericTypeParameters == null; }
+        public override bool IsSingleIdentifier() { return !HasGlobal && Parts.Count == 1 && Parts[0] is CsConcreteTypeIdentifierPartIdentifier && ((CsConcreteTypeIdentifierPartIdentifier) Parts[0]).GenericTypeParameters == null; }
     }
     public class CsArrayTypeIdentifier : CsTypeIdentifier
     {
@@ -730,7 +752,9 @@ namespace ParseCs
         public override string ToString() { return InnerType.ToString() + "?"; }
         public override bool IsSingleIdentifier() { return false; }
     }
+    #endregion
 
+    #region Generics
     public abstract class CsGenericTypeConstraint : CsNode { }
     public class CsGenericTypeConstraintNew : CsGenericTypeConstraint { public override string ToString() { return "new()"; } }
     public class CsGenericTypeConstraintClass : CsGenericTypeConstraint { public override string ToString() { return "class"; } }
@@ -740,7 +764,9 @@ namespace ParseCs
         public CsTypeIdentifier BaseClass;
         public override string ToString() { return BaseClass.ToString(); }
     }
+    #endregion
 
+    #region Custom attributes
     public class CsCustomAttribute : CsNode
     {
         public CsTypeIdentifier Type;
@@ -780,7 +806,9 @@ namespace ParseCs
             return sb.ToString();
         }
     }
+    #endregion
 
+    #region Statements
     public abstract class CsStatement : CsNode
     {
         public List<string> GotoLabels;
@@ -860,29 +888,20 @@ namespace ParseCs
     }
     public class CsForStatement : CsStatement
     {
-        public CsStatement InitializationStatement;
+        public List<CsStatement> InitializationStatements = new List<CsStatement>();
         public CsExpression TerminationCondition;
-        public CsExpression LoopExpression;
+        public List<CsExpression> LoopExpressions = new List<CsExpression>();
         public CsStatement Body;
         public override string ToString()
         {
             var sb = new StringBuilder(gotoLabels());
             sb.Append("for (");
-            if (InitializationStatement != null)
-                sb.Append(InitializationStatement.ToString().Trim());
-            else
-                sb.Append(';');
+            sb.Append(InitializationStatements.Select(i => i.ToString().Trim().TrimEnd(';')).JoinString(", "));
+            sb.Append("; ");
             if (TerminationCondition != null)
-            {
-                sb.Append(' ');
                 sb.Append(TerminationCondition.ToString());
-            }
-            sb.Append(';');
-            if (LoopExpression != null)
-            {
-                sb.Append(' ');
-                sb.Append(LoopExpression.ToString());
-            }
+            sb.Append("; ");
+            sb.Append(LoopExpressions.Select(l => l.ToString()).JoinString(", "));
             sb.Append(")\n");
             sb.Append(Body is CsBlock ? Body.ToString() : Body.ToString().Indent());
             return sb.ToString();
@@ -993,9 +1012,13 @@ namespace ParseCs
     public class CsGotoStatement : CsStatement { public string Label; public override string ToString() { return string.Concat(gotoLabels(), "goto ", Label.Sanitize(), ";\n"); } }
     public class CsContinueStatement : CsStatement { public override string ToString() { return string.Concat(gotoLabels(), "continue;\n"); } }
     public class CsBreakStatement : CsStatement { public override string ToString() { return string.Concat(gotoLabels(), "break;\n"); } }
+    public class CsGotoDefaultStatement : CsStatement { public override string ToString() { return string.Concat(gotoLabels(), "goto default;\n"); } }
+    public class CsGotoCaseStatement : CsStatement { public CsExpression Expression; public override string ToString() { return string.Concat(gotoLabels(), "goto case ", Expression.ToString(), ";\n"); } }
     public class CsYieldBreakStatement : CsStatement { public override string ToString() { return string.Concat(gotoLabels(), "yield break;\n"); } }
     public class CsYieldReturnStatement : CsStatement { public CsExpression Expression; public override string ToString() { return string.Concat(gotoLabels(), "yield return ", Expression.ToString(), ";\n"); } }
+    #endregion
 
+    #region Expressions
     public abstract class CsExpression : CsNode { }
     public enum AssignmentOperator { Eq, TimesEq, DivEq, ModEq, PlusEq, MinusEq, ShlEq, ShrEq, AndEq, XorEq, OrEq }
     public class CsAssignmentExpression : CsExpression
@@ -1086,6 +1109,7 @@ namespace ParseCs
     }
     public abstract class CsTypeOperatorExpression : CsExpression { public CsTypeIdentifier Type; }
     public class CsTypeofExpression : CsTypeOperatorExpression { public override string ToString() { return string.Concat("typeof(", Type.ToString(), ')'); } }
+    public class CsSizeofExpression : CsTypeOperatorExpression { public override string ToString() { return string.Concat("sizeof(", Type.ToString(), ')'); } }
     public class CsDefaultExpression : CsTypeOperatorExpression { public override string ToString() { return string.Concat("default(", Type.ToString(), ')'); } }
     public abstract class CsCheckedUncheckedExpression : CsExpression { public CsExpression Subexpression;    }
     public class CsCheckedExpression : CsCheckedUncheckedExpression { public override string ToString() { return string.Concat("checked(", Subexpression.ToString(), ')'); } }
@@ -1144,17 +1168,11 @@ namespace ParseCs
     public class CsNullExpression : CsExpression { public override string ToString() { return "null"; } }
     public class CsThisExpression : CsExpression { public override string ToString() { return "this"; } }
     public class CsBaseExpression : CsExpression { public override string ToString() { return "base"; } }
-    public class CsInitializer : CsNode
-    {
-        public string Name;
-        public CsExpression Expression;
-        public override string ToString() { return string.Concat(Name.Sanitize(), " = ", Expression.ToString()); }
-    }
     public class CsNewConstructorExpression : CsExpression
     {
         public CsTypeIdentifier Type;
         public List<Tuple<ParameterType, CsExpression>> Parameters = new List<Tuple<ParameterType, CsExpression>>();
-        public List<CsInitializer> Initializers;
+        public List<CsExpression> Initializers;
         public List<CsExpression> Adds;
         public override string ToString()
         {
@@ -1185,7 +1203,7 @@ namespace ParseCs
     }
     public class CsNewAnonymousTypeExpression : CsExpression
     {
-        public List<CsInitializer> Initializers = new List<CsInitializer>();
+        public List<CsExpression> Initializers = new List<CsExpression>();
         public override string ToString() { return string.Concat("new { ", Initializers.Select(ini => ini.ToString()).JoinString(", "), " }"); }
     }
     public class CsNewImplicitlyTypedArrayExpression : CsExpression
@@ -1223,17 +1241,31 @@ namespace ParseCs
     }
     public abstract class CsLambaExpression : CsExpression
     {
-        public List<string> ParameterNames = new List<string>();
+        public List<CsParameter> ParameterNames = new List<CsParameter>();
+        protected StringBuilder parametersCs()
+        {
+            var sb = new StringBuilder();
+            if (ParameterNames.Count == 1 && ParameterNames[0].Type == null)
+                sb.Append(ParameterNames[0].ToString());
+            else
+            {
+                sb.Append('(');
+                sb.Append(ParameterNames.Select(p => p.ToString()).JoinString(", "));
+                sb.Append(')');
+            }
+            sb.Append(" =>");
+            return sb;
+        }
     }
     public class CsSimpleLambdaExpression : CsLambaExpression
     {
         public CsExpression Expression;
-        public override string ToString() { return string.Concat(ParameterNames.Count == 1 ? ParameterNames[0].Sanitize() : string.Concat('(', ParameterNames.Select(p => p.Sanitize()).JoinString(", "), ')'), " => ", Expression.ToString()); }
+        public override string ToString() { return string.Concat(parametersCs(), ' ', Expression.ToString()); }
     }
     public class CsBlockLambdaExpression : CsLambaExpression
     {
         public CsBlock Block;
-        public override string ToString() { return string.Concat(ParameterNames.Count == 1 ? ParameterNames[0].Sanitize() : string.Concat('(', ParameterNames.Select(p => p.Sanitize()).JoinString(", "), ')'), " =>\n", Block.ToString(), '\n'); }
+        public override string ToString() { return string.Concat(parametersCs(), '\n', Block.ToString(), '\n'); }
     }
     public class CsAnonymousMethodExpression : CsExpression
     {
@@ -1262,4 +1294,76 @@ namespace ParseCs
             return sb.ToString();
         }
     }
+    public class CsLinqExpression : CsExpression
+    {
+        public List<CsLinqElement> Elements = new List<CsLinqElement>();
+        public override string ToString()
+        {
+            var sb = new StringBuilder();
+            sb.Append(Elements[0]);
+            foreach (var elem in Elements.Skip(1))
+            {
+                sb.Append('\n');
+                sb.Append(elem.ToString().Indent());
+            }
+            return sb.ToString();
+        }
+    }
+    public abstract class CsLinqElement : CsNode { }
+    public class CsLinqFromClause : CsLinqElement
+    {
+        public string ItemName;
+        public CsExpression SourceExpression;
+        public override string ToString() { return string.Concat("from ", ItemName.Sanitize(), " in ", SourceExpression.ToString()); }
+    }
+    public class CsLinqJoinClause : CsLinqElement
+    {
+        // join p in products on c.Orders.Length equals p.IdProduct
+        public string ItemName;
+        public CsExpression SourceExpression, KeyExpression1, KeyExpression2;
+        public string IntoName;
+        public override string ToString()
+        {
+            var s = string.Concat("join ", ItemName.Sanitize(), " in ", SourceExpression, " on ", KeyExpression1, " equals ", KeyExpression2);
+            return IntoName == null ? s : string.Concat(s, " into ", IntoName.Sanitize());
+        }
+    }
+    public class CsLinqLetClause : CsLinqElement
+    {
+        public string ItemName;
+        public CsExpression Expression;
+        public override string ToString() { return string.Concat("let ", ItemName.Sanitize(), " = ", Expression.ToString()); }
+    }
+    public class CsLinqWhereClause : CsLinqElement
+    {
+        public CsExpression WhereExpression;
+        public override string ToString() { return string.Concat("where ", WhereExpression.ToString()); }
+    }
+    public enum LinqOrderByType { None, Ascending, Descending }
+    public class CsLinqOrderByClause : CsLinqElement
+    {
+        public List<Tuple<LinqOrderByType, CsExpression>> KeyExpressions = new List<Tuple<LinqOrderByType, CsExpression>>();
+        public override string ToString()
+        {
+            return "orderby " + KeyExpressions.Select(k => k.E2.ToString() + (k.E1 == LinqOrderByType.Ascending ? " ascending" : k.E1 == LinqOrderByType.Descending ? " descending" : string.Empty)).JoinString(", ");
+        }
+    }
+    public class CsLinqSelectClause : CsLinqElement
+    {
+        public CsExpression SelectExpression;
+        public override string ToString() { return string.Concat("select ", SelectExpression.ToString()); }
+    }
+    public class CsLinqGroupByClause : CsLinqElement
+    {
+        public CsExpression SelectionExpression;
+        public CsExpression KeyExpression;
+        public override string ToString() { return string.Concat("group ", SelectionExpression.ToString(), " by ", KeyExpression.ToString()); }
+    }
+    public class CsLinqIntoClause : CsLinqElement
+    {
+        public string ItemName;
+        public override string ToString() { return string.Concat("into ", ItemName.Sanitize()); }
+    }
+
+    #endregion
 }

@@ -1,11 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
-using RT.Util.ExtensionMethods;
-using System.Globalization;
 using System.Text.RegularExpressions;
-using RT.Util.Collections;
+using RT.Util.ExtensionMethods;
 
 namespace ParseCs
 {
@@ -61,11 +60,11 @@ namespace ParseCs
         private static IEnumerable<Token> lex(string data)
         {
             int index = 0;
-            while (index < data.Length && char.IsWhiteSpace(data, index))
-                index += char.IsSurrogate(data, index) ? 2 : 1;
             int dataLength = data.Length;
+            while (index < dataLength && char.IsWhiteSpace(data, index))
+                index += char.IsSurrogate(data, index) ? 2 : 1;
 
-            do
+            while (index < dataLength)
             {
                 // Keywords
                 foreach (var kw in Keywords)
@@ -239,7 +238,7 @@ namespace ParseCs
                 if ((data[index] >= '0' && data[index] <= '9') || (data[index] == '.' && index + 1 < data.Length && data[index + 1] >= '0' && data[index + 1] <= '9'))
                 {
                     int origIndex = index;
-                    bool haveDot = data[index] == '.';
+                    bool haveDot = false;
                     bool haveE = false;
                     while (index < data.Length)
                     {
@@ -327,7 +326,6 @@ namespace ParseCs
                 while (index < dataLength && char.IsWhiteSpace(data, index))
                     index += char.IsSurrogate(data, index) ? 2 : 1;
             }
-            while (index < dataLength);
         }
 
         private static bool beginningOfLine(string data, int index)
