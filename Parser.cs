@@ -239,7 +239,7 @@ namespace ParseCs
                         var posName = tok[i].TokenStr;
                         i += 2;
                         var expr = parseExpression(tok, ref i);
-                        attr.Named.Add(Ut.Tuple(posName, expr));
+                        attr.Named.Add(new CsNameAndExpression { Name = posName, Expression = expr });
                     }
                     else if (acceptPositional)
                         attr.Positional.Add(parseExpression(tok, ref i));
@@ -262,10 +262,10 @@ namespace ParseCs
             }
             return new CsCustomAttributeGroup { CustomAttributes = group, Location = loc, NoNewLine = noNewLine };
         }
-        private static List<Tuple<string, List<CsCustomAttributeGroup>>> parseGenericTypeParameterList(TokenJar tok, ref int i)
+        private static List<CsNameAndCustomAttributes> parseGenericTypeParameterList(TokenJar tok, ref int i)
         {
             tok[i].Assert("<");
-            var genericTypeParameters = new List<Tuple<string, List<CsCustomAttributeGroup>>>();
+            var genericTypeParameters = new List<CsNameAndCustomAttributes>();
             while (true)
             {
                 i++;
@@ -274,7 +274,7 @@ namespace ParseCs
                     customAttribs.Add(parseCustomAttributeGroup(tok, ref i, true));
                 var name = tok[i].Identifier();
                 i++;
-                genericTypeParameters.Add(Ut.Tuple(name, customAttribs));
+                genericTypeParameters.Add(new CsNameAndCustomAttributes { Name = name, CustomAttributes = customAttribs });
                 if (tok[i].IsBuiltin(","))
                     continue;
                 else if (tok[i].IsBuiltin(">"))
@@ -431,15 +431,15 @@ namespace ParseCs
                     if (!(partAbstract is CsConcreteTypeIdentifierPartIdentifier))
                         throw new ParseException("'{0}' cannot have generic arguments.".Fmt(partAbstract.ToString()), tok[j].Index, ty);
                     var part = (CsConcreteTypeIdentifierPartIdentifier) partAbstract;
-                    part.GenericTypeParameters = new List<CsTypeIdentifier>();
+                    part.GenericTypeArguments = new List<CsTypeIdentifier>();
                     j++;
                     if ((flags & typeIdentifierFlags.AllowEmptyGenerics) != 0 && (tok[j].IsBuiltin(",") || tok[j].IsBuiltin(">")))
                     {
-                        part.GenericTypeParameters.Add(new CsEmptyGenericTypeIdentifier());
+                        part.GenericTypeArguments.Add(new CsEmptyGenericTypeIdentifier());
                         while (tok[j].IsBuiltin(","))
                         {
                             j++;
-                            part.GenericTypeParameters.Add(new CsEmptyGenericTypeIdentifier());
+                            part.GenericTypeArguments.Add(new CsEmptyGenericTypeIdentifier());
                         }
                         if (!tok.Has('>', j))
                             throw new ParseException("',' or '>' expected. (2)", tok[j].Index, ty);
@@ -450,11 +450,11 @@ namespace ParseCs
                     {
                         try
                         {
-                            part.GenericTypeParameters.Add(parseTypeIdentifier(tok, ref j, flags | typeIdentifierFlags.AllowSuffixes | typeIdentifierFlags.AllowArrays | typeIdentifierFlags.AllowKeywords));
+                            part.GenericTypeArguments.Add(parseTypeIdentifier(tok, ref j, flags | typeIdentifierFlags.AllowSuffixes | typeIdentifierFlags.AllowArrays | typeIdentifierFlags.AllowKeywords));
                             while (tok[j].IsBuiltin(","))
                             {
                                 j++;
-                                part.GenericTypeParameters.Add(parseTypeIdentifier(tok, ref j, flags | typeIdentifierFlags.AllowSuffixes | typeIdentifierFlags.AllowArrays | typeIdentifierFlags.AllowKeywords));
+                                part.GenericTypeArguments.Add(parseTypeIdentifier(tok, ref j, flags | typeIdentifierFlags.AllowSuffixes | typeIdentifierFlags.AllowArrays | typeIdentifierFlags.AllowKeywords));
                             }
                             if (!tok.Has('>', j))
                                 throw new ParseException("',' or '>' expected. (3)", tok[j].Index, ty);
@@ -465,7 +465,7 @@ namespace ParseCs
                         {
                             if ((flags & typeIdentifierFlags.Lenient) == 0)
                             {
-                                part.GenericTypeParameters = null;
+                                part.GenericTypeArguments = null;
                                 return ty;
                             }
                             throw;
@@ -743,7 +743,7 @@ namespace ParseCs
             // If it's "<", it may be a generic method, or it may be a method or property that explicitly implements a member inherited from an abstract type or interface with a generic type argument.
             // If it's ".", it is a method or property that explicitly implements an inherited abstract or interface member. The method could still be generic.
 
-            List<Tuple<string, List<CsCustomAttributeGroup>>> genericsAlreadyParsed = null;
+            List<CsNameAndCustomAttributes> genericsAlreadyParsed = null;
             CsTypeIdentifier implementsFrom = null;
 
             if (tok[j].IsBuiltin("<") || tok[j].IsBuiltin("."))
@@ -781,13 +781,13 @@ namespace ParseCs
                     throw new ParseException("Identifier expected instead of '" + ty.Parts[ty.Parts.Count - 1].ToString() + "'.", tok[j - 1].Index);
                 var lastPart = (CsConcreteTypeIdentifierPartIdentifier) ty.Parts[ty.Parts.Count - 1];
                 ty.Parts.RemoveAt(ty.Parts.Count - 1);
-                if (lastPart != null && lastPart.GenericTypeParameters != null)
+                if (lastPart != null && lastPart.GenericTypeArguments != null)
                 {
-                    genericsAlreadyParsed = new List<Tuple<string, List<CsCustomAttributeGroup>>>();
-                    foreach (var g in lastPart.GenericTypeParameters)
+                    genericsAlreadyParsed = new List<CsNameAndCustomAttributes>();
+                    foreach (var g in lastPart.GenericTypeArguments)
                     {
                         if (g.IsSingleIdentifier())
-                            genericsAlreadyParsed.Add(Ut.Tuple(g.ToString(), new List<CsCustomAttributeGroup>()));
+                            genericsAlreadyParsed.Add(new CsNameAndCustomAttributes { Name = g.ToString(), CustomAttributes = new List<CsCustomAttributeGroup>() });
                         else
                             throw new ParseException(@"Invalid generic type parameter declaration.", tok[j].Index);
                     }
@@ -871,7 +871,7 @@ namespace ParseCs
                     i++;
                     initializer = parseExpression(tok, ref i);
                 }
-                fi.NamesAndInitializers.Add(Ut.Tuple(name, initializer));
+                fi.NamesAndInitializers.Add(new CsNameAndExpression { Name = name, Expression = initializer });
                 while (tok[i].IsBuiltin(","))
                 {
                     i++;
@@ -883,14 +883,14 @@ namespace ParseCs
                         i++;
                         initializer = parseExpression(tok, ref i);
                     }
-                    fi.NamesAndInitializers.Add(Ut.Tuple(name, initializer));
+                    fi.NamesAndInitializers.Add(new CsNameAndExpression { Name = name, Expression = initializer });
                 }
             }
             catch (ParseException e)
             {
                 if (e.IncompleteResult is CsExpression)
                 {
-                    fi.NamesAndInitializers.Add(Ut.Tuple(name, (CsExpression) e.IncompleteResult));
+                    fi.NamesAndInitializers.Add(new CsNameAndExpression { Name = name, Expression = (CsExpression) e.IncompleteResult });
                     throw new ParseException(e.Message, e.Index, fi);
                 }
                 throw;
@@ -1042,28 +1042,16 @@ namespace ParseCs
                 i++;
                 if (!tok[i].IsBuiltin("("))
                     throw new ParseException("'(' expected.", tok[i].Index);
-                i++;
-                con.CallParameters = new List<CsExpression>();
                 con.MethodBody = new CsBlock();  // temporary; just so we can throw a valid constructor as an incomplete result
                 try
                 {
-                    if (!tok[i].IsBuiltin(")"))
-                    {
-                        con.CallParameters.Add(parseExpression(tok, ref i));
-                        while (tok[i].IsBuiltin(","))
-                        {
-                            i++;
-                            con.CallParameters.Add(parseExpression(tok, ref i));
-                        }
-                        if (!tok[i].IsBuiltin(")"))
-                            throw new ParseException("',' or ')' expected.", tok[i].Index);
-                    }
-                    i++;
+                    bool dummy;
+                    con.CallArguments = parseArgumentList(tok, ref i, out dummy);
                 }
                 catch (ParseException e)
                 {
-                    if (e.IncompleteResult is CsExpression)
-                        con.CallParameters.Add((CsExpression) e.IncompleteResult);
+                    if (e.IncompleteResult is List<CsArgument>)
+                        con.CallArguments = (List<CsArgument>) e.IncompleteResult;
                     throw new ParseException(e.Message, e.Index, con);
                 }
             }
@@ -1112,7 +1100,7 @@ namespace ParseCs
                     i++;
                     initializer = parseExpression(tok, ref i);
                 }
-                ev.NamesAndInitializers.Add(Ut.Tuple(name, initializer));
+                ev.NamesAndInitializers.Add(new CsNameAndExpression { Name = name, Expression = initializer });
                 while (tok[i].IsBuiltin(","))
                 {
                     canHaveCurly = false;
@@ -1127,13 +1115,13 @@ namespace ParseCs
                         i++;
                         initializer = parseExpression(tok, ref i);
                     }
-                    ev.NamesAndInitializers.Add(Ut.Tuple(name, initializer));
+                    ev.NamesAndInitializers.Add(new CsNameAndExpression { Name = name, Expression = initializer });
                 }
             }
             catch (ParseException e)
             {
                 if (e.IncompleteResult is CsExpression)
-                    ev.NamesAndInitializers.Add(Ut.Tuple(name, (CsExpression) e.IncompleteResult));
+                    ev.NamesAndInitializers.Add(new CsNameAndExpression { Name = name, Expression = (CsExpression) e.IncompleteResult });
                 throw new ParseException(e.Message, e.Index, ev);
             }
             if (!tok[i].IsBuiltin(";"))
@@ -1304,8 +1292,8 @@ namespace ParseCs
             }
             catch (ParseException e)
             {
-                if (e.IncompleteResult is List<Tuple<string, List<CsCustomAttributeGroup>>>)
-                    deleg.GenericTypeParameters = (List<Tuple<string, List<CsCustomAttributeGroup>>>) e.IncompleteResult;
+                if (e.IncompleteResult is List<CsNameAndCustomAttributes>)
+                    deleg.GenericTypeParameters = (List<CsNameAndCustomAttributes>) e.IncompleteResult;
                 else if (e.IncompleteResult is List<CsParameter>)
                     deleg.Parameters = (List<CsParameter>) e.IncompleteResult;
                 else if (e.IncompleteResult is Dictionary<string, List<CsGenericTypeConstraint>>)
@@ -1335,8 +1323,8 @@ namespace ParseCs
                 try { type.GenericTypeParameters = parseGenericTypeParameterList(tok, ref i); }
                 catch (ParseException e)
                 {
-                    if (e.IncompleteResult is List<Tuple<string, List<CsCustomAttributeGroup>>>)
-                        type.GenericTypeParameters = (List<Tuple<string, List<CsCustomAttributeGroup>>>) e.IncompleteResult;
+                    if (e.IncompleteResult is List<CsNameAndCustomAttributes>)
+                        type.GenericTypeParameters = (List<CsNameAndCustomAttributes>) e.IncompleteResult;
                     throw new ParseException(e.Message, e.Index, type);
                 }
             }
@@ -1969,14 +1957,14 @@ namespace ParseCs
                             i++;
                             expr = parseExpression(tok, ref i);
                         }
-                        decl.NamesAndInitializers.Add(Ut.Tuple(name, expr));
+                        decl.NamesAndInitializers.Add(new CsNameAndExpression { Name = name, Expression = expr });
                     }
                     while (tok[i].IsBuiltin(","));
                 }
                 catch (ParseException e)
                 {
                     if (e.IncompleteResult is CsExpression && name != null)
-                        decl.NamesAndInitializers.Add(Ut.Tuple(name, (CsExpression) e.IncompleteResult));
+                        decl.NamesAndInitializers.Add(new CsNameAndExpression { Name = name, Expression = (CsExpression) e.IncompleteResult });
                     throw new ParseException(e.Message, e.Index, decl);
                 }
 
@@ -2305,27 +2293,28 @@ namespace ParseCs
         private static CsExpression parseExpressionPrimary(TokenJar tok, ref int i)
         {
             var left = parseExpressionIdentifierOrKeyword(tok, ref i);
-            while (tok[i].IsBuiltin(".") || tok[i].IsBuiltin("(") || tok[i].IsBuiltin("[") || tok[i].IsBuiltin("++") || tok[i].IsBuiltin("--"))
+            while (tok[i].IsBuiltin(".") || tok[i].IsBuiltin("->") || tok[i].IsBuiltin("(") || tok[i].IsBuiltin("[") || tok[i].IsBuiltin("++") || tok[i].IsBuiltin("--"))
             {
-                if (tok[i].IsBuiltin("."))
+                if (tok[i].IsBuiltin(".") || tok[i].IsBuiltin("->"))
                 {
+                    MemberAccessType type = tok[i].IsBuiltin(".") ? MemberAccessType.Regular : MemberAccessType.PointerDeref;
                     i++;
-                    try { left = new CsMemberAccessExpression { Left = left, Right = parseExpressionIdentifier(tok, ref i) }; }
+                    try { left = new CsMemberAccessExpression { AccessType = type, Left = left, Right = parseExpressionIdentifier(tok, ref i) }; }
                     catch (ParseException e)
                     {
                         if (e.IncompleteResult is CsExpression)
-                            throw new ParseException(e.Message, e.Index, new CsMemberAccessExpression { Left = left, Right = (CsExpression) e.IncompleteResult });
+                            throw new ParseException(e.Message, e.Index, new CsMemberAccessExpression { AccessType = type, Left = left, Right = (CsExpression) e.IncompleteResult });
                         throw new ParseException(e.Message, e.Index, left);
                     }
                 }
                 else if (tok[i].IsBuiltin("(") || tok[i].IsBuiltin("["))
                 {
                     var func = new CsFunctionCallExpression { Left = left };
-                    try { func.Parameters = parseFunctionCall(tok, ref i, out func.IsIndexer); }
+                    try { func.Arguments = parseArgumentList(tok, ref i, out func.IsIndexer); }
                     catch (ParseException e)
                     {
-                        if (e.IncompleteResult is List<Tuple<ParameterType, CsExpression>>)
-                            func.Parameters = (List<Tuple<ParameterType, CsExpression>>) e.IncompleteResult;
+                        if (e.IncompleteResult is List<CsArgument>)
+                            func.Arguments = (List<CsArgument>) e.IncompleteResult;
                         throw new ParseException(e.Message, e.Index, func);
                     }
                     left = func;
@@ -2343,7 +2332,7 @@ namespace ParseCs
             }
             return left;
         }
-        private static List<Tuple<ParameterType, CsExpression>> parseFunctionCall(TokenJar tok, ref int i, out bool isIndexer)
+        private static List<CsArgument> parseArgumentList(TokenJar tok, ref int i, out bool isIndexer)
         {
             isIndexer = tok[i].IsBuiltin("[");
             if (!tok[i].IsBuiltin("(") && !tok[i].IsBuiltin("["))
@@ -2351,25 +2340,25 @@ namespace ParseCs
             i++;
             if (isIndexer && tok[i].IsBuiltin("]"))
                 throw new ParseException("Empty indexing expressions are not allowed.", tok[i].Index);
-            var parameters = new List<Tuple<ParameterType, CsExpression>>();
+            var arguments = new List<CsArgument>();
             if (!tok[i].IsBuiltin(isIndexer ? "]" : ")"))
             {
-                ParameterType pt = ParameterType.In;
+                ArgumentType inoutref = ArgumentType.In;
                 try
                 {
                     while (true)
                     {
                         if (tok[i].IsBuiltin("ref"))
                         {
-                            pt = ParameterType.Ref;
+                            inoutref = ArgumentType.Ref;
                             i++;
                         }
                         else if (tok[i].IsBuiltin("out"))
                         {
-                            pt = ParameterType.Out;
+                            inoutref = ArgumentType.Out;
                             i++;
                         }
-                        parameters.Add(Ut.Tuple(pt, parseExpression(tok, ref i)));
+                        arguments.Add(new CsArgument { ArgumentType = inoutref, ArgumentExpression = parseExpression(tok, ref i) });
                         if (tok[i].IsBuiltin(isIndexer ? "]" : ")"))
                             break;
                         else if (!tok[i].IsBuiltin(","))
@@ -2380,12 +2369,12 @@ namespace ParseCs
                 catch (ParseException e)
                 {
                     if (e.IncompleteResult is CsExpression)
-                        parameters.Add(Ut.Tuple(pt, (CsExpression) e.IncompleteResult));
-                    throw new ParseException(e.Message, e.Index, parameters);
+                        arguments.Add(new CsArgument { ArgumentType = inoutref, ArgumentExpression = (CsExpression) e.IncompleteResult });
+                    throw new ParseException(e.Message, e.Index, arguments);
                 }
             }
             i++;
-            return parameters;
+            return arguments;
         }
         private static CsExpression parseExpressionIdentifierOrKeyword(TokenJar tok, ref int i)
         {
@@ -2501,14 +2490,14 @@ namespace ParseCs
                         try
                         {
                             bool dummy;
-                            constructor.Parameters = parseFunctionCall(tok, ref i, out dummy);
+                            constructor.Arguments = parseArgumentList(tok, ref i, out dummy);
                             if (tok[i].IsBuiltin("{"))
                                 constructor.Initializers = parseArrayLiteral(tok, ref i);
                         }
                         catch (ParseException e)
                         {
-                            if (e.IncompleteResult is List<Tuple<ParameterType, CsExpression>>)
-                                constructor.Parameters = (List<Tuple<ParameterType, CsExpression>>) e.IncompleteResult;
+                            if (e.IncompleteResult is List<CsArgument>)
+                                constructor.Arguments = (List<CsArgument>) e.IncompleteResult;
                             else if (e.IncompleteResult is List<CsExpression>)
                                 constructor.Initializers = (List<CsExpression>) e.IncompleteResult;
                             throw new ParseException(e.Message, e.Index, constructor);
@@ -2534,11 +2523,11 @@ namespace ParseCs
                         bool dummy;
                         var k = i;
                         var ret = new CsNewArrayExpression { Type = ty };
-                        ret.SizeExpressions.AddRange(parseFunctionCall(tok, ref i, out dummy).Select(p =>
+                        ret.SizeExpressions.AddRange(parseArgumentList(tok, ref i, out dummy).Select(p =>
                         {
-                            if (p.E1 != ParameterType.In)
+                            if (p.ArgumentType != ArgumentType.In)
                                 throw new ParseException("'out' and 'ref' parameters are not allowed in an array constructor.", tok[k].Index);
-                            return p.E2;
+                            return p.ArgumentExpression;
                         }));
                         while (tok[i].IsBuiltin("["))
                         {
@@ -2857,7 +2846,7 @@ namespace ParseCs
                     type = LinqOrderByType.Descending;
                     i++;
                 }
-                orderby.KeyExpressions.Add(Ut.Tuple(type, expr));
+                orderby.KeyExpressions.Add(new CsLinqOrderBy { OrderByExpression = expr, OrderByType = type });
                 if (!tok[i].IsBuiltin(","))
                     break;
                 i++;

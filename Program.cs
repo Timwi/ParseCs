@@ -12,7 +12,6 @@ namespace ParseCs
         {
             var brokenfiles = new string[] { 
                 @"C:\c\users\rs\ConwayLifesaver\ConwaySaver.cs",
-                @"C:\c\main\FingerGym\Layouts\physical.UK-Desktop-Standard.cs",
                 @"C:\c\main\common\thirdparty\TaoFramework-2.1.0\source\src\Tao.FFmpeg\AVFormat.cs",
                 @"C:\c\main\common\thirdparty\SubSonic-3.0-e0e4ba2\SubSonic.Core\Linq\Translation\SQLite\SQLiteFormatter.cs",
                 @"C:\c\main\common\thirdparty\SubSonic-3.0-e0e4ba2\SubSonic.Core\Linq\Translation\MySQL\MySqlFormatter.cs",
@@ -20,10 +19,12 @@ namespace ParseCs
             };
 
             var files = Enumerable.Empty<string>()
-                // .Concat(Directory.GetFiles(@"C:\c", "*.cs", SearchOption.AllDirectories))
-                .Concat(Directory.GetFiles(@"C:\c\builds\Release-AnyCPU", "*.cs", SearchOption.AllDirectories))
+                .Concat(Directory.GetFiles(@"C:\c", "*.cs", SearchOption.AllDirectories))
+                // .Concat(Directory.GetFiles(@"C:\c\builds\Release-AnyCPU", "*.cs", SearchOption.AllDirectories))
                 // .Concat(brokenfiles)
                 // .Concat(@"C:\c\builds\Release-AnyCPU\CompactFrameworkCompatibility.fmt.cs")
+                // .Concat(Directory.GetFiles(@"C:\c\users\timwi\ParseCs", "*.cs", SearchOption.AllDirectories))
+                // .Except(brokenfiles)
                 ;
 
             // var x = brokenfiles.Where(b => b.StartsWith(@"C:\c\builds\Debug-AnyCPU\")).ToArray();
