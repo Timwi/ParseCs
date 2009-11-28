@@ -1,14 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Text;
 using RT.Util.ExtensionMethods;
-using RT.Util.Collections;
-using RT.Util;
-using System.Diagnostics;
 
-namespace ParseCs
+namespace RT.KitchenSink.ParseCs
 {
     public static class Parser
     {

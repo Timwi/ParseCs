@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using RT.Util;
 using RT.Util.ExtensionMethods;
+using RT.KitchenSink.ParseCs;
 
 namespace ParseCs
 {
@@ -19,10 +20,10 @@ namespace ParseCs
             };
 
             var files = Enumerable.Empty<string>()
-                .Concat(Directory.GetFiles(@"C:\c", "*.cs", SearchOption.AllDirectories))
+                // .Concat(Directory.GetFiles(@"C:\c", "*.cs", SearchOption.AllDirectories))
                 // .Concat(Directory.GetFiles(@"C:\c\builds\Release-AnyCPU", "*.cs", SearchOption.AllDirectories))
                 // .Concat(brokenfiles)
-                // .Concat(@"C:\c\builds\Release-AnyCPU\CompactFrameworkCompatibility.fmt.cs")
+                .Concat(@"C:\c\main\ExpSok\Translation.cs")
                 // .Concat(Directory.GetFiles(@"C:\c\users\timwi\ParseCs", "*.cs", SearchOption.AllDirectories))
                 // .Except(brokenfiles)
                 ;

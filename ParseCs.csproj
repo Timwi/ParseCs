@@ -47,14 +47,14 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Lexer.cs" />
-    <Compile Include="Parser.cs" />
-    <Compile Include="ParseTree.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Token.cs" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\..\main\common\KitchenSink\KitchenSink.csproj">
+      <Project>{7EDB80B5-CA44-4AD9-BF23-18A9470FEB69}</Project>
+      <Name>KitchenSink</Name>
+    </ProjectReference>
     <ProjectReference Include="..\..\..\main\common\Util\Util.csproj">
       <Project>{8D0FE79C-AD8D-475C-9E6F-9CAE85365B5D}</Project>
       <Name>Util</Name>

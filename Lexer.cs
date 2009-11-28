@@ -6,7 +6,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using RT.Util.ExtensionMethods;
 
-namespace ParseCs
+namespace RT.KitchenSink.ParseCs
 {
     public static class Lexer
     {
@@ -347,7 +347,6 @@ namespace ParseCs
             var openRegions = new Stack<string>();
             int lastIndex = 0;
 
-            openIfs.Push(true); // act as if everything was wrapped in a big "#if TRUE"
             foreach (var t in tok)
             {
                 if (t.Type == TokenType.PreprocessorDirective)
