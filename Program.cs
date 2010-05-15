@@ -44,7 +44,7 @@ namespace ParseCs
                     var targetFile = PathUtil.AppPathCombine(Path.GetFileNameWithoutExtension(f) + ".fmt.cs");
                     Console.Write(f);
                     var start = DateTime.Now;
-                    var result = Parser.Parse(source);
+                    var result = Parser.ParseDocument(source);
                     var taken = DateTime.Now - start;
                     File.WriteAllText(targetFile, result.ToString());
                     Console.WriteLine(" parsed successfully. ({1} bytes, {2} sec)".Fmt(f, new FileInfo(f).Length, taken.TotalSeconds));
