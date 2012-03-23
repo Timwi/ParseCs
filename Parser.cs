@@ -15,6 +15,10 @@ namespace RT.ParseCs
         /// <exception cref="ParseException">The specified C# source code could not be parsed.</exception>
         public static CsDocument ParseDocument(string source)
         {
+            if (source == null)
+                throw new ArgumentNullException("source");
+            if (string.IsNullOrWhiteSpace(source))
+                return new CsDocument { StartIndex = 0, EndIndex = source.Length };
             var tokens = Lexer.Lex(source, Lexer.LexOptions.IgnoreComments);
             int tokenIndex = 0;
             return parseDocument(tokens, ref tokenIndex);
@@ -947,7 +951,7 @@ namespace RT.ParseCs
 
                 if (tok[j].IsBuiltin("{"))
                 {
-                    // Case ③d and ③ e: an explicitly-implemented property or an event.
+                    // Case ③d and ③e: an explicitly-implemented property or an event.
                     // It must be an explicit implementation because normal properties/events are already handled by parseMemberDeclaration().
                     // Explicitly-implemented events must have a body with add/remove methods; they can’t be events with the fields syntax, e.g.
                     //      event EventHandler IMyInterface.MyEvent = null;   // ✗ not allowed

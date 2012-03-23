@@ -541,6 +541,20 @@ namespace RT.ParseCs
                 return string.Empty;
             return GenericTypeConstraints.Select(kvp => " where " + kvp.Key.Sanitize() + " : " + kvp.Value.Select(c => c.ToString()).JoinString(", ")).JoinString();
         }
+
+        protected IEnumerable<CsNode> SubnodesGenericTypeParameters()
+        {
+            if (GenericTypeParameters != null)
+                return GenericTypeParameters.SelectMany(gtp => gtp.Subnodes);
+            return Enumerable.Empty<CsNode>();
+        }
+
+        protected IEnumerable<CsNode> SubnodesGenericTypeConstraints()
+        {
+            if (GenericTypeConstraints != null)
+                return GenericTypeConstraints.Values.SelectMany(gtcs => gtcs).SelectMany(gtc => gtc.Subnodes);
+            return Enumerable.Empty<CsNode>();
+        }
     }
     public abstract class CsTypeLevel2 : CsTypeCanBeGeneric
     {
@@ -586,6 +600,27 @@ namespace RT.ParseCs
             }
             return sb.ToString();
         }
+
+        public override IEnumerable<CsNode> Subnodes
+        {
+            get
+            {
+                foreach (var subnode in SubnodesGenericTypeParameters())
+                    yield return subnode;
+
+                if (BaseTypes != null)
+                    foreach (var node in BaseTypes)
+                        foreach (var subnode in node.Subnodes)
+                            yield return subnode;
+
+                foreach (var subnode in SubnodesGenericTypeConstraints())
+                    yield return subnode;
+
+                foreach (var node in Members)
+                    foreach (var subnode in node.Subnodes)
+                        yield return subnode;
+            }
+        }
     }
     public sealed class CsInterface : CsTypeLevel2
     {
@@ -627,6 +662,25 @@ namespace RT.ParseCs
             sb.Append(genericTypeConstraintsCs());
             sb.Append(";\n");
             return sb.ToString();
+        }
+
+        public override IEnumerable<CsNode> Subnodes
+        {
+            get
+            {
+                foreach (var subnode in ReturnType.Subnodes)
+                    yield return subnode;
+
+                foreach (var subnode in SubnodesGenericTypeParameters())
+                    yield return subnode;
+
+                foreach (var node in Parameters)
+                    foreach (var subnode in node.Subnodes)
+                        yield return subnode;
+
+                foreach (var subnode in SubnodesGenericTypeConstraints())
+                    yield return subnode;
+            }
         }
     }
     public sealed class CsEnum : CsType
@@ -759,6 +813,18 @@ namespace RT.ParseCs
     #endregion
 
     #region Generics
+    public enum VarianceMode { Invariant, Covariant, Contravariant }
+    public sealed class CsGenericParameter : CsNode
+    {
+        public VarianceMode Variance;
+        public string Name;
+        public List<CsCustomAttributeGroup> CustomAttributes = new List<CsCustomAttributeGroup>();
+        public override string ToString()
+        {
+            return CustomAttributes.Select(c => c.ToString()).JoinString() + (Variance == VarianceMode.Covariant ? "out " : Variance == VarianceMode.Contravariant ? "in " : "") + Name.Sanitize();
+        }
+    }
+
     public abstract class CsGenericTypeConstraint : CsNode { }
     public sealed class CsGenericTypeConstraintNew : CsGenericTypeConstraint { public override string ToString() { return "new()"; } }
     public sealed class CsGenericTypeConstraintClass : CsGenericTypeConstraint { public override string ToString() { return "class"; } }
@@ -788,7 +854,12 @@ namespace RT.ParseCs
     {
         public CustomAttributeLocation Location;
         public List<CsCustomAttribute> CustomAttributes;
+
+        // NoNewLine does NOT state whether there was a newline after the custom attribute in the original source.
+        // It ONLY indicates whether ToString() should generate a such a newline. The parser sets this to ‘true’ for
+        // custom attributes on parameters and on generic type parameters, and to ‘false’ for everything else.
         public bool NoNewLine = false;
+
         public override string ToString()
         {
             var sb = new StringBuilder("[");
@@ -1582,6 +1653,16 @@ namespace RT.ParseCs
             return "orderby " + KeyExpressions.Select(k => k.ToString()).JoinString(", ");
         }
     }
+    public enum LinqOrderByType { None, Ascending, Descending }
+    public sealed class CsLinqOrderBy : CsNode
+    {
+        public CsExpression OrderByExpression;
+        public LinqOrderByType OrderByType;
+        public override string ToString()
+        {
+            return OrderByExpression.ToString() + (OrderByType == LinqOrderByType.Ascending ? " ascending" : OrderByType == LinqOrderByType.Descending ? " descending" : "");
+        }
+    }
     public sealed class CsLinqSelectClause : CsLinqElement
     {
         public CsExpression SelectExpression;
@@ -1598,10 +1679,11 @@ namespace RT.ParseCs
         public string ItemName;
         public override string ToString() { return string.Concat("into ", ItemName.Sanitize()); }
     }
-
     #endregion
 
     #region Miscellaneous
+    // CsNameAndExpression is used, for example, in field declarations:
+    //      public string Button1 = "Abort", Button2 = "Retry", Button3 = "Ignore";
     public sealed class CsNameAndExpression : CsNode
     {
         public string Name;
@@ -1614,21 +1696,7 @@ namespace RT.ParseCs
         }
     }
 
-    public enum VarianceMode { Invariant, Covariant, Contravariant }
-
-    public sealed class CsGenericParameter : CsNode
-    {
-        public string Name;
-        public VarianceMode Variance;
-        public List<CsCustomAttributeGroup> CustomAttributes = new List<CsCustomAttributeGroup>();
-        public override string ToString()
-        {
-            return CustomAttributes.Select(c => c.ToString()).JoinString() + (Variance == VarianceMode.Covariant ? "out " : Variance == VarianceMode.Contravariant ? "in " : "") + Name.Sanitize();
-        }
-    }
-
     public enum ArgumentMode { In, Out, Ref }
-
     public sealed class CsArgument : CsNode
     {
         public string ArgumentName;
@@ -1648,18 +1716,6 @@ namespace RT.ParseCs
                 sb.Append("ref ");
             sb.Append(ArgumentExpression.ToString());
             return sb.ToString();
-        }
-    }
-
-    public enum LinqOrderByType { None, Ascending, Descending }
-
-    public sealed class CsLinqOrderBy : CsNode
-    {
-        public CsExpression OrderByExpression;
-        public LinqOrderByType OrderByType;
-        public override string ToString()
-        {
-            return OrderByExpression.ToString() + (OrderByType == LinqOrderByType.Ascending ? " ascending" : OrderByType == LinqOrderByType.Descending ? " descending" : string.Empty);
         }
     }
     #endregion
