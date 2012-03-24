@@ -6,11 +6,11 @@ using System.Runtime.InteropServices;
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
 [assembly: AssemblyTitle("ParseCs")]
-[assembly: AssemblyDescription("")]
+[assembly: AssemblyDescription("Parser for C# code.")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("HP")]
+[assembly: AssemblyCompany("CuteBits")]
 [assembly: AssemblyProduct("ParseCs")]
-[assembly: AssemblyCopyright("Copyright © HP 2009")]
+[assembly: AssemblyCopyright("Copyright © CuteBits 2012")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 

@@ -318,7 +318,7 @@ namespace RT.ParseCs
                 }
 
                 var name = tok[i].Identifier();
-                genericTypeParameters.Add(new CsGenericParameter { StartIndex = startIndex, EndIndex = tok[i].EndIndex, Name = name, CustomAttributes = customAttribs });
+                genericTypeParameters.Add(new CsGenericParameter { StartIndex = startIndex, EndIndex = tok[i].EndIndex, Name = name, CustomAttributes = customAttribs, Variance = variance });
                 i++;
                 if (tok[i].IsBuiltin(","))
                     continue;
@@ -2159,7 +2159,22 @@ namespace RT.ParseCs
                         if (tok[i].IsBuiltin("="))
                         {
                             i++;
-                            expr = parseExpression(tok, ref i);
+                            if (tok[i].IsBuiltin("stackalloc"))
+                            {
+                                var stackAllocStartIndex = tok[i].StartIndex;
+                                i++;
+                                var stackAllocType = parseTypeName(tok, ref i, typeIdentifierFlags.AllowKeywords | typeIdentifierFlags.Lenient).Item1;
+                                if (!tok[i].IsBuiltin("["))
+                                    throw new ParseException("'[' expected.", tok[i].StartIndex);
+                                i++;
+                                var stackAllocExpr = parseExpression(tok, ref i);
+                                if (!tok[i].IsBuiltin("]"))
+                                    throw new ParseException("']' expected.", tok[i].StartIndex);
+                                expr = new CsStackAllocExpression { StartIndex = stackAllocStartIndex, EndIndex = tok[i].EndIndex, Type = stackAllocType, SizeExpression = stackAllocExpr };
+                                i++;
+                            }
+                            else
+                                expr = parseExpression(tok, ref i);
                         }
                         decl.NamesAndInitializers.Add(new CsNameAndExpression { StartIndex = nameStartIndex, EndIndex = tok[i - 1].EndIndex, Name = name, Expression = expr });
                     }

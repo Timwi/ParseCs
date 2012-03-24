@@ -329,14 +329,14 @@ namespace RT.ParseCs
         private string genericTypeParametersCs()
         {
             if (GenericTypeParameters == null)
-                return string.Empty;
+                return "";
             return string.Concat("<", GenericTypeParameters.Select(g => g.ToString()).JoinString(", "), ">");
         }
 
         private string genericTypeConstraintsCs()
         {
             if (GenericTypeConstraints == null)
-                return string.Empty;
+                return "";
             return GenericTypeConstraints.Select(kvp => " where " + kvp.Key.Sanitize() + " : " + kvp.Value.Select(c => c.ToString()).JoinString(", ")).JoinString();
         }
 
@@ -531,14 +531,14 @@ namespace RT.ParseCs
         protected string genericTypeParametersCs()
         {
             if (GenericTypeParameters == null)
-                return string.Empty;
+                return "";
             return string.Concat("<", GenericTypeParameters.Select(g => g.ToString()).JoinString(", "), ">");
         }
 
         protected string genericTypeConstraintsCs()
         {
             if (GenericTypeConstraints == null)
-                return string.Empty;
+                return "";
             return GenericTypeConstraints.Select(kvp => " where " + kvp.Key.Sanitize() + " : " + kvp.Value.Select(c => c.ToString()).JoinString(", ")).JoinString();
         }
 
@@ -564,12 +564,14 @@ namespace RT.ParseCs
         public List<CsMember> Members = new List<CsMember>();
 
         protected abstract string typeTypeCs { get; }
-        protected override StringBuilder modifiersCs()
+        protected override sealed StringBuilder modifiersCs()
         {
             var sb = base.modifiersCs();
+            moreModifiers(sb);
             if (IsPartial) sb.Append("partial ");
             return sb;
         }
+        public virtual void moreModifiers(StringBuilder sb) { }
         public override string ToString()
         {
             var sb = modifiersCs();
@@ -635,13 +637,11 @@ namespace RT.ParseCs
         public bool IsAbstract, IsSealed, IsStatic;
 
         protected override string typeTypeCs { get { return "class"; } }
-        protected override StringBuilder modifiersCs()
+        public override void moreModifiers(StringBuilder sb)
         {
-            var sb = base.modifiersCs();
             if (IsAbstract) sb.Append("abstract ");
             if (IsSealed) sb.Append("sealed ");
             if (IsStatic) sb.Append("static ");
-            return sb;
         }
     }
     public sealed class CsDelegate : CsTypeCanBeGeneric
@@ -779,13 +779,13 @@ namespace RT.ParseCs
     }
     public sealed class CsEmptyGenericParameter : CsTypeName
     {
-        public override string ToString() { return string.Empty; }
+        public override string ToString() { return ""; }
     }
     public sealed class CsConcreteTypeName : CsTypeName
     {
         public bool HasGlobal;
         public List<CsSimpleName> Parts = new List<CsSimpleName>();
-        public override string ToString() { return (HasGlobal ? "global::" : string.Empty) + Parts.Select(p => p.ToString()).JoinString("."); }
+        public override string ToString() { return (HasGlobal ? "global::" : "") + Parts.Select(p => p.ToString()).JoinString("."); }
         public override string GetSingleIdentifier()
         {
             if (HasGlobal || Parts.Count != 1)
@@ -887,7 +887,7 @@ namespace RT.ParseCs
     public abstract class CsStatement : CsNode
     {
         public List<string> GotoLabels;
-        protected string gotoLabels() { return GotoLabels == null ? string.Empty : GotoLabels.Select(g => g.Sanitize() + ':').JoinString(" ") + (this is CsEmptyStatement ? " " : "\n"); }
+        protected string gotoLabels() { return GotoLabels == null ? "" : GotoLabels.Select(g => g.Sanitize() + ':').JoinString(" ") + (this is CsEmptyStatement ? " " : "\n"); }
     }
     public sealed class CsEmptyStatement : CsStatement { public override string ToString() { return gotoLabels() + ";\n"; } }
     public sealed class CsBlock : CsStatement
@@ -959,7 +959,7 @@ namespace RT.ParseCs
         public string VariableName;
         public CsExpression LoopExpression;
         public CsStatement Body;
-        public override string ToString() { return string.Concat(gotoLabels(), "foreach (", VariableType == null ? string.Empty : VariableType.ToString() + ' ', VariableName.Sanitize(), " in ", LoopExpression.ToString(), ")\n", Body is CsBlock ? Body.ToString() : Body.ToString().Indent()); }
+        public override string ToString() { return string.Concat(gotoLabels(), "foreach (", VariableType == null ? "" : VariableType.ToString() + ' ', VariableName.Sanitize(), " in ", LoopExpression.ToString(), ")\n", Body is CsBlock ? Body.ToString() : Body.ToString().Indent()); }
     }
     public sealed class CsForStatement : CsStatement
     {
@@ -1492,6 +1492,16 @@ namespace RT.ParseCs
                 }
             }
             return sb.ToString();
+        }
+        public override Expression ToLinqExpression(NameResolver resolver, bool isChecked) { throw new NotImplementedException(); }
+    }
+    public sealed class CsStackAllocExpression : CsExpression
+    {
+        public CsTypeName Type;
+        public CsExpression SizeExpression;
+        public override string ToString()
+        {
+            return string.Concat("stackalloc ", Type, '[', SizeExpression, ']');
         }
         public override Expression ToLinqExpression(NameResolver resolver, bool isChecked) { throw new NotImplementedException(); }
     }
