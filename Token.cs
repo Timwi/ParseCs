@@ -56,7 +56,7 @@ namespace RT.ParseCs
         }
     }
 
-    public sealed class TokenJar
+    public sealed class TokenJar : IEnumerable<Token>
     {
         private IEnumerator<Token> _enumerator;
         private Token _endToken;
@@ -83,6 +83,7 @@ namespace RT.ParseCs
                 return _list[index];
             }
         }
+
         public bool IndexExists(int index)
         {
             if (_list == null)
@@ -95,6 +96,18 @@ namespace RT.ParseCs
                 return token.Type != TokenType.EndOfFile;
             }
             catch (ParseException) { return false; }
+        }
+
+        public IEnumerator<Token> GetEnumerator()
+        {
+            while (_enumerator.MoveNext())
+                _list.Add(_enumerator.Current);
+            return _list.GetEnumerator();
+        }
+
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator()
+        {
+            return GetEnumerator();
         }
     }
 }

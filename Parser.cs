@@ -33,7 +33,24 @@ namespace RT.ParseCs
         {
             var tokens = Lexer.Lex(source, Lexer.LexOptions.IgnoreComments);
             int tokenIndex = 0;
-            return parseExpression(tokens, ref tokenIndex);
+            var result = parseExpression(tokens, ref tokenIndex);
+            if (tokens.IndexExists(tokenIndex))
+                throw new ParseException("There is extra code behind the end of the expression. Are you missing an operator?", tokens[tokenIndex].StartIndex, result);
+            return result;
+        }
+
+        /// <summary>
+        /// Parses the specified C# statement into a parse tree.
+        /// </summary>
+        /// <param name="source">C# source code to parse.</param>
+        /// <exception cref="ParseException">The specified C# source code could not be parsed.</exception>
+        public static CsStatement ParseStatement(string source)
+        {
+            if (source == null)
+                throw new ArgumentNullException("source");
+            var tokens = Lexer.Lex(source, Lexer.LexOptions.IgnoreComments);
+            int tokenIndex = 0;
+            return parseStatement(tokens, ref tokenIndex);
         }
 
         [Flags]
@@ -3112,7 +3129,7 @@ namespace RT.ParseCs
             }
 
             afterTy:
-            var ret = new CsSimpleNameIdentifier { StartIndex = startIndex, EndIndex = tok[i].EndIndex, Name = tok[i].Identifier("Type expected.") };
+            var ret = new CsSimpleNameIdentifier { StartIndex = startIndex, EndIndex = tok[i].EndIndex, Name = tok[i].Identifier("Identifier expected.") };
             i++;
             return ret;
         }

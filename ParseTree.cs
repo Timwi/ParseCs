@@ -67,8 +67,8 @@ namespace RT.ParseCs
             if (UsingNamespaces.Any())
                 sb.Append('\n');
 
-            foreach (var ns in UsingAliases)
-                sb.Append(ns.ToString());
+            foreach (var alias in UsingAliases)
+                sb.Append(alias.ToString());
             if (UsingAliases.Any())
                 sb.Append('\n');
 
@@ -698,9 +698,8 @@ namespace RT.ParseCs
                 return sb.ToString();
             }
             sb.Append("\n{\n");
-            sb.Append(EnumValues.Select(ev => ev.ToString()).JoinString().Indent());
-            sb.Remove(sb.Length - 2, 1);  // remove the last comma from the last enum value
-            sb.Append("}\n");
+            sb.Append(EnumValues.Select(ev => ev.ToString()).JoinString(",\n").Indent());
+            sb.Append("\n}\n");
             return sb.ToString();
         }
     }
@@ -718,7 +717,6 @@ namespace RT.ParseCs
                 sb.Append(" = ");
                 sb.Append(LiteralValue.ToString());
             }
-            sb.Append(",\n");
             return sb.ToString();
         }
     }
@@ -1242,7 +1240,15 @@ namespace RT.ParseCs
                 return Operand.ToString() + "++";
             if (Operator == UnaryOperator.PostfixDec)
                 return Operand.ToString() + "--";
-            return Operator.ToCs() + Operand.ToString();
+
+            // Special case: We could have multiple + or - unary operators following one another; in those cases
+            // we need to add an extra space so that it doesn’t turn into the prefix ++ or -- operator
+            if (Operator == UnaryOperator.Plus && Operand is CsUnaryOperatorExpression && ((CsUnaryOperatorExpression) Operand).Operator == UnaryOperator.Plus)
+                return "+ " + Operand.ToString();
+            else if (Operator == UnaryOperator.Minus && Operand is CsUnaryOperatorExpression && ((CsUnaryOperatorExpression) Operand).Operator == UnaryOperator.Minus)
+                return "- " + Operand.ToString();
+            else
+                return Operator.ToCs() + Operand.ToString();
         }
         public override Expression ToLinqExpression(NameResolver resolver, bool isChecked)
         {

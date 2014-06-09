@@ -6,7 +6,7 @@ using System.Text.RegularExpressions;
 
 namespace RT.ParseCs
 {
-    public static class Extensions
+    static class Extensions
     {
         public static string Indent(this string input)
         {

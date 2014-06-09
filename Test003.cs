@@ -288,9 +288,9 @@ namespace XYZ
             var lamba = x => blah;
             var lamba = (x, y) => blah;
             var lamba = (int x, ref List y) => blah;
-            var lamba = () => { blah; };
-            var lamba = x => { blah; };
-            var lamba = (int x, out List y) => { blah; };
+            var lamba = () => { blah(); };
+            var lamba = x => { blah(); };
+            var lamba = (int x, out List y) => { blah(); };
         }
     }
 }
