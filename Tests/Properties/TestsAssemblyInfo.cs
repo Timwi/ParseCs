@@ -5,11 +5,11 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following 
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("ParseCs")]
-[assembly: AssemblyDescription("Parser for C# code.")]
+[assembly: AssemblyTitle("ParseCsTests")]
+[assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("CuteBits")]
-[assembly: AssemblyProduct("ParseCs")]
+[assembly: AssemblyProduct("ParseCsTests")]
 [assembly: AssemblyCopyright("Copyright © CuteBits 2012")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
@@ -20,7 +20,7 @@ using System.Runtime.InteropServices;
 [assembly: ComVisible(false)]
 
 // The following GUID is for the ID of the typelib if this project is exposed to COM
-[assembly: Guid("406f0f67-265d-4589-b7d4-c114da0a108b")]
+[assembly: Guid("3d58ad3c-aba5-4f8b-8ee0-664015a63118")]
 
 // Version information for an assembly consists of the following four values:
 //

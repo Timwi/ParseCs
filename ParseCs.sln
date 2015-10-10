@@ -1,11 +1,11 @@
 ﻿
-Microsoft Visual Studio Solution File, Format Version 11.00
-# Visual Studio 2010
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ParseCs", "ParseCs.csproj", "{A75E751E-F91C-4148-83D3-A39FEF2ECF0E}"
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2012
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ParseCs", "Src\ParseCs.csproj", "{A75E751E-F91C-4148-83D3-A39FEF2ECF0E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ParseCsTests", "ParseCsTests.csproj", "{7DFFD9B9-1685-484B-A5B1-61219FD79223}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ParseCsTests", "Tests\ParseCsTests.csproj", "{7DFFD9B9-1685-484B-A5B1-61219FD79223}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NUnitDirect", "..\NUnitDirect\NUnitDirect.csproj", "{275ECB9D-F75E-45F8-BB34-AD122589D2CC}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NUnitDirect", "..\NUnitDirect\Src\NUnitDirect.csproj", "{275ECB9D-F75E-45F8-BB34-AD122589D2CC}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
