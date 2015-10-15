@@ -58,6 +58,9 @@ namespace RT.ParseCs
 
         private static IEnumerable<Token> lex(string data)
         {
+            if (data.Length < 1)
+                yield break;
+
             // Tolerate a UTF BOM
             int index = data[0] == 0xFEFF ? 1 : 0;
             int dataLength = data.Length;
