@@ -6,9 +6,7 @@ using System.Text;
 
 namespace RT.ParseCs
 {
-#pragma warning disable 1591    // Missing XML comment for publicly visible type or member
-
-    public static class Lexer
+    static class Lexer
     {
         public static string[] Keywords = new[] {
             "abstract", "as",
@@ -401,7 +399,7 @@ namespace RT.ParseCs
         }
     }
 
-    public sealed class LexException : Exception
+    sealed class LexException : Exception
     {
         private int _index;
         public LexException(string message, int index) : this(message, index, null) { }

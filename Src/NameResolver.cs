@@ -5,10 +5,11 @@ using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 
-#pragma warning disable 1591    // Missing XML comment for publicly visible type or member
-
 namespace RT.ParseCs
 {
+    /// <summary>
+    ///     Provides the means to resolve a name while compiling an expression to an expression tree (see <see
+    ///     cref="CsExpression.ToLinqExpression"/>).</summary>
     public class NameResolver
     {
         private string _currentNamespace;
@@ -26,12 +27,31 @@ namespace RT.ParseCs
             _assemblies = assemblies;
         }
 
+        /// <summary>
+        ///     Generates a <see cref="NameResolver"/> that resolves identifiers from the point of view of code inside a type.</summary>
+        /// <param name="type">
+        ///     The type according to whose context names are resolved.</param>
+        /// <param name="assemblies">
+        ///     A set of target assemblies from which to resolve type references.</param>
+        /// <returns>
+        ///     A name resolver.</returns>
         public static NameResolver FromType(Type type, params Assembly[] assemblies)
         {
             if (type == null)
                 throw new ArgumentNullException("type");
             return new NameResolver(type.Namespace, type, null, assemblies);
         }
+
+        /// <summary>
+        ///     Generates a <see cref="NameResolver"/> that resolves identifiers from the point of view of code inside an
+        ///     instance method.</summary>
+        /// <param name="instance">
+        ///     An object instance. Names are resolved according to the context of any instance method within this object’s
+        ///     type.</param>
+        /// <param name="assemblies">
+        ///     A set of target assemblies from which to resolve type references.</param>
+        /// <returns>
+        ///     A name resolver.</returns>
         public static NameResolver FromInstance(object instance, params Assembly[] assemblies)
         {
             if (instance == null)
@@ -200,6 +220,12 @@ namespace RT.ParseCs
             throw new InvalidOperationException("The name “{0}” could not be resolved.".Fmt(simpleName));
         }
 
+        /// <summary>
+        ///     Returns the type corresponding to the specified parsed type name.</summary>
+        /// <param name="typeName">
+        ///     The parse tree node representing the type identifier.</param>
+        /// <returns>
+        ///     The resolved type.</returns>
         public Type ResolveType(CsTypeName typeName)
         {
             if (typeName is CsEmptyGenericParameter)
@@ -228,6 +254,12 @@ namespace RT.ParseCs
             throw new NotImplementedException();
         }
 
+        /// <summary>
+        ///     Adds a local name to this name resolver.</summary>
+        /// <param name="name">
+        ///     Specifies the identifier.</param>
+        /// <param name="resolveToExpression">
+        ///     The expression to which the specified identifier should resolve.</param>
         public void AddLocalName(string name, Expression resolveToExpression)
         {
             if (_localNames.ContainsKey(name))
@@ -235,6 +267,12 @@ namespace RT.ParseCs
             _localNames[name] = new ResolveContextExpression(resolveToExpression);
         }
 
+        /// <summary>
+        ///     Adds a local name to this name resolver.</summary>
+        /// <param name="name">
+        ///     Specifies the identifier.</param>
+        /// <param name="resolveToType">
+        ///     The type to which the specified identifier should resolve.</param>
         public void AddLocalName(string name, Type resolveToType)
         {
             if (_localNames.ContainsKey(name))
@@ -242,19 +280,42 @@ namespace RT.ParseCs
             _localNames[name] = new ResolveContextType(resolveToType);
         }
 
+        /// <summary>
+        ///     Removes a name from this name resolver.</summary>
+        /// <param name="name">
+        ///     The name to forget.</param>
+        /// <remarks>
+        ///     If <paramref name="name"/> is also the name of a namespace in any of the target assemblies, the name will
+        ///     still resolve to that namespace. This method only removes local names added via <see
+        ///     cref="AddLocalName(string,Expression)"/> or <see cref="AddLocalName(string,Type)"/>.</remarks>
         public void ForgetLocalName(string name)
         {
             _localNames.Remove(name);
         }
 
+        /// <summary>
+        ///     Adds the equivalent of a <c>using</c> declaration.</summary>
+        /// <param name="namespace">
+        ///     The namespace specified in the <c>using</c> declaration.</param>
+        /// <example>
+        ///     <para>
+        ///         If the <paramref name="namespace"/> is equal to <c>System</c> and one of the target assemblies contains a
+        ///         type called <c>System.DateTime</c>, the name <c>DateTime</c> will resolve to that type.</para></example>
         public void AddUsing(string @namespace)
         {
             _usingNamespaces.Add(@namespace);
         }
     }
 
+    /// <summary>Provides the means to resolve names to specific object instances.</summary>
     public interface ICustomResolver
     {
-        object Resolve(string str);
+        /// <summary>
+        ///     When implemented in a derived class, returns the result of resolving the specified <paramref name="name"/>.</summary>
+        /// <param name="name">
+        ///     The name to resolve.</param>
+        /// <returns>
+        ///     The object instance the name resolves to.</returns>
+        object Resolve(string name);
     }
 }

@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.Linq.Expressions;
 using System.Reflection;
 
-#pragma warning disable 1591    // Missing XML comment for publicly visible type or member
-
 namespace RT.ParseCs
 {
     abstract class ResolveContext

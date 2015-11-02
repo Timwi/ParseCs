@@ -15,6 +15,7 @@
     <OutputPath>..\Builds\$(Configuration)\</OutputPath>
     <IntermediateOutputPath>..\Builds\$(Configuration)\obj-$(AssemblyName)\</IntermediateOutputPath>
     <BaseIntermediateOutputPath>..\Builds\$(Configuration)\obj-$(AssemblyName)\</BaseIntermediateOutputPath>
+    <DocumentationFile>..\..\..\builds\$(Configuration)\$(AssemblyName).xml</DocumentationFile>
     <TargetFrameworkProfile>Client</TargetFrameworkProfile>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">

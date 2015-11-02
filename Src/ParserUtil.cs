@@ -5,8 +5,6 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 
-#pragma warning disable 1591    // Missing XML comment for publicly visible type or member
-
 namespace RT.ParseCs
 {
     static class ParserUtil

@@ -5,7 +5,7 @@ using System.Text;
 
 namespace RT.ParseCs
 {
-    public class AutoList<T> : List<T>
+    class AutoList<T> : List<T>
     {
         public new T this[int index]
         {

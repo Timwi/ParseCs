@@ -2,9 +2,7 @@
 
 namespace RT.ParseCs
 {
-#pragma warning disable 1591    // Missing XML comment for publicly visible type or member
-
-    public enum TokenType
+    enum TokenType
     {
         Builtin,
         Identifier,
@@ -17,7 +15,7 @@ namespace RT.ParseCs
         EndOfFile
     }
 
-    public sealed class Token
+    sealed class Token
     {
         private string _str;
         private TokenType _type;
@@ -56,7 +54,7 @@ namespace RT.ParseCs
         }
     }
 
-    public sealed class TokenJar : IEnumerable<Token>
+    sealed class TokenJar : IEnumerable<Token>
     {
         private IEnumerator<Token> _enumerator;
         private Token _endToken;

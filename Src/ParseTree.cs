@@ -9,13 +9,15 @@ using System.Text.RegularExpressions;
 
 namespace RT.ParseCs
 {
-#pragma warning disable 1591    // Missing XML comment for publicly visible type or member
-
+    /// <summary>Provides a base class for all nodes in the C# parse tree.</summary>
     public abstract class CsNode
     {
+        /// <summary>The character index at which the node begins in the source code.</summary>
         public int StartIndex;
+        /// <summary>The character index at which the node ends in the source code.</summary>
         public int EndIndex;
 
+        /// <summary>Enumerates all the descendent nodes that are contained in this code.</summary>
         public virtual IEnumerable<CsNode> Subnodes
         {
             get
@@ -48,6 +50,8 @@ namespace RT.ParseCs
                 yield return subEnum;
         }
     }
+
+#pragma warning disable 1591    // Missing XML comment for publicly visible type or member
 
     #region Document & Namespace
     public sealed class CsDocument : CsNode
