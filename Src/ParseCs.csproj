@@ -51,6 +51,7 @@
     <Compile Include="AutoList.cs" />
     <Compile Include="CandidateInfo.cs" />
     <Compile Include="Conversion.cs" />
+    <Compile Include="Documentation.cs" />
     <Compile Include="Exceptions.cs" />
     <Compile Include="Extensions.cs" />
     <Compile Include="Lexer.cs" />
