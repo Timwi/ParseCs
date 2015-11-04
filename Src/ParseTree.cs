@@ -17,7 +17,7 @@ namespace RT.ParseCs
         /// <summary>The character index at which the node ends in the source code.</summary>
         public int EndIndex;
 
-        /// <summary>Enumerates all the descendent nodes that are contained in this code.</summary>
+        /// <summary>Enumerates all the descendent nodes that are contained in this node.</summary>
         public virtual IEnumerable<CsNode> Subnodes
         {
             get
@@ -54,14 +54,21 @@ namespace RT.ParseCs
 #pragma warning disable 1591    // Missing XML comment for publicly visible type or member
 
     #region Document & Namespace
+    /// <summary>C# document (source file).</summary>
     public sealed class CsDocument : CsNode
     {
+        /// <summary>The <c>using</c> declarations that import a namespace.</summary>
         public List<CsUsingNamespace> UsingNamespaces = new List<CsUsingNamespace>();
+        /// <summary>The <c>using</c> declarations that define an alias.</summary>
         public List<CsUsingAlias> UsingAliases = new List<CsUsingAlias>();
+        /// <summary>The top-level custom attributes that are not attached to a type.</summary>
         public List<CsCustomAttributeGroup> CustomAttributes = new List<CsCustomAttributeGroup>();
+        /// <summary>The namespaces declared in this file.</summary>
         public List<CsNamespace> Namespaces = new List<CsNamespace>();
+        /// <summary>The types declared outside of any namespace in this file.</summary>
         public List<CsType> Types = new List<CsType>();
 
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             var sb = new StringBuilder();
@@ -100,26 +107,41 @@ namespace RT.ParseCs
             return sb.ToString();
         }
     }
+    /// <summary>Base class for C# <c>using</c> declarations.</summary>
     public abstract class CsUsing : CsNode { }
+    /// <summary>C# <c>using</c> declaration that imports a namespace (for example, <c>using System;</c>).</summary>
     public sealed class CsUsingNamespace : CsUsing
     {
+        /// <summary>The namespace imported.</summary>
         public string Namespace;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return "using " + Namespace.Sanitize() + ";\n"; }
     }
+    /// <summary>C# <c>using</c> declaration that defines an alias (for example, <c>using M = System.Math;</c>).</summary>
     public sealed class CsUsingAlias : CsUsing
     {
+        /// <summary>The alias defined (the name before the <c>=</c> sign).</summary>
         public string Alias;
+        /// <summary>The type name the alias is defined to refer to (the part after the <c>=</c> sign).</summary>
         public CsTypeName Original;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return "using " + Alias.Sanitize() + " = " + Original.ToString() + ";\n"; }
     }
+    /// <summary>C# namespace declaration.</summary>
     public sealed class CsNamespace : CsNode
     {
+        /// <summary>The name of the namespace.</summary>
         public string Name;
+        /// <summary>The <c>using</c> declarations that import a namespace.</summary>
         public List<CsUsingNamespace> UsingNamespaces = new List<CsUsingNamespace>();
+        /// <summary>The <c>using</c> declarations that define an alias.</summary>
         public List<CsUsingAlias> UsingAliases = new List<CsUsingAlias>();
+        /// <summary>The namespaces declared nested inside this namespace.</summary>
         public List<CsNamespace> Namespaces = new List<CsNamespace>();
+        /// <summary>The types declared directly in this namespace (nested namespaces may contain further types).</summary>
         public List<CsType> Types = new List<CsType>();
 
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             var sb = new StringBuilder();
@@ -160,10 +182,31 @@ namespace RT.ParseCs
     #endregion
 
     #region Members, except types
+    /// <summary>
+    ///     Base class for C# members, but not types (that’s <see cref="CsType"/> for declarations and <see
+    ///     cref="CsTypeName"/> for references).</summary>
     public abstract class CsMember : CsNode
     {
+        /// <summary>Custom attributes.</summary>
         public List<CsCustomAttributeGroup> CustomAttributes = new List<CsCustomAttributeGroup>();
-        public bool IsInternal, IsPrivate, IsProtected, IsPublic, IsNew, IsUnsafe;
+        /// <summary>Specifies whether the member is explicitly marked <c>internal</c>.</summary>
+        public bool IsInternal;
+        /// <summary>Specifies whether the member is explicitly marked <c>private</c>.</summary>
+        public bool IsPrivate;
+        /// <summary>Specifies whether the member is explicitly marked <c>protected</c>.</summary>
+        public bool IsProtected;
+        /// <summary>Specifies whether the member is explicitly marked <c>public</c>.</summary>
+        public bool IsPublic;
+        /// <summary>
+        ///     Specifies whether the member is explicitly marked <c>new</c> (a member that hides an inherited member of the
+        ///     same name).</summary>
+        public bool IsNew;
+        /// <summary>
+        ///     Specifies whether the member is explicitly marked <c>unsafe</c> (a method or property that contains unsafe
+        ///     code).</summary>
+        public bool IsUnsafe;
+
+        /// <summary>Returns a <see cref="StringBuilder"/> containing the modifiers.</summary>
         protected virtual StringBuilder modifiersCs()
         {
             var sb = new StringBuilder();
@@ -178,13 +221,19 @@ namespace RT.ParseCs
             return sb;
         }
     }
-    public abstract class CsMultiMember : CsMember
-    {
-        public CsTypeName Type;
-        public List<CsNameAndExpression> NamesAndInitializers = new List<CsNameAndExpression>();
 
+    /// <summary>Base class for C# events and fields.</summary>
+    public abstract class CsEventOrField : CsMember
+    {
+        /// <summary>Specifies whether the member is explicitly marked <c>static</c>.</summary>
         public bool IsStatic;
 
+        /// <summary>The type of the member.</summary>
+        public CsTypeName Type;
+        /// <summary>The names and initialization expressions for each member declared.</summary>
+        public List<CsNameAndExpression> NamesAndInitializers = new List<CsNameAndExpression>();
+
+        /// <summary>Returns a <see cref="StringBuilder"/> containing the modifiers.</summary>
         protected override StringBuilder modifiersCs()
         {
             var sb = base.modifiersCs();
@@ -192,14 +241,31 @@ namespace RT.ParseCs
             return sb;
         }
     }
-    public abstract class CsMemberLevel2 : CsMember
+
+    /// <summary>Base class for C# methods and properties.</summary>
+    public abstract class CsMethodOrProperty : CsMember
     {
+        /// <summary>Specifies whether the member is explicitly marked <c>abstract</c>.</summary>
+        public bool IsAbstract;
+        /// <summary>Specifies whether the member is explicitly marked <c>virtual</c>.</summary>
+        public bool IsVirtual;
+        /// <summary>Specifies whether the member is explicitly marked <c>override</c>.</summary>
+        public bool IsOverride;
+        /// <summary>Specifies whether the member is explicitly marked <c>sealed</c>.</summary>
+        public bool IsSealed;
+        /// <summary>Specifies whether the member is explicitly marked <c>static</c>.</summary>
+        public bool IsStatic;
+        /// <summary>Specifies whether the member is explicitly marked <c>extern</c>.</summary>
+        public bool IsExtern;
+
+        /// <summary>The type of the member (return type in the case of methods).</summary>
+        public CsTypeName Type;
+        /// <summary>Name of the member.</summary>
         public string Name;
+        /// <summary>The interface for which this member is an explicit interface implementation (<c>null</c> if none).</summary>
         public CsTypeName ImplementsFrom;
-        public bool IsAbstract, IsVirtual, IsOverride, IsSealed, IsStatic, IsExtern;
 
-        public CsTypeName Type;  // for methods, this is the return type
-
+        /// <summary>Returns a <see cref="StringBuilder"/> containing the modifiers.</summary>
         protected override StringBuilder modifiersCs()
         {
             var sb = base.modifiersCs();
@@ -212,12 +278,27 @@ namespace RT.ParseCs
             return sb;
         }
     }
-    public sealed class CsEvent : CsMultiMember
+
+    /// <summary>C# event declaration.</summary>
+    public sealed class CsEvent : CsEventOrField
     {
-        public bool IsAbstract, IsVirtual, IsOverride, IsSealed;
+        /// <summary>Specifies whether the event is explicitly marked <c>abstract</c>.</summary>
+        public bool IsAbstract;
+        /// <summary>Specifies whether the event is explicitly marked <c>virtual</c>.</summary>
+        public bool IsVirtual;
+        /// <summary>Specifies whether the event is explicitly marked <c>override</c>.</summary>
+        public bool IsOverride;
+        /// <summary>Specifies whether the event is explicitly marked <c>sealed</c>.</summary>
+        public bool IsSealed;
+
+        /// <summary>
+        ///     The <c>add</c> and/or <c>remove</c> methods in this event declaration, or <c>null</c> if none are provided.</summary>
         public List<CsSimpleMethod> Methods = null;
+
+        /// <summary>The interface for which this event is an explicit interface implementation (<c>null</c> if none).</summary>
         public CsTypeName ImplementsFrom;
 
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             var sb = modifiersCs();
@@ -245,9 +326,18 @@ namespace RT.ParseCs
             return sb.ToString();
         }
     }
-    public sealed class CsField : CsMultiMember
+
+    /// <summary>C# field declaration.</summary>
+    public sealed class CsField : CsEventOrField
     {
-        public bool IsReadonly, IsConst, IsVolatile;
+        /// <summary>Specifies whether the field is explicitly marked <c>readonly</c>.</summary>
+        public bool IsReadonly;
+        /// <summary>Specifies whether the field is explicitly marked <c>const</c>.</summary>
+        public bool IsConst;
+        /// <summary>Specifies whether the field is explicitly marked <c>volatile</c>.</summary>
+        public bool IsVolatile;
+
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             var sb = modifiersCs();
@@ -261,9 +351,14 @@ namespace RT.ParseCs
             return sb.ToString();
         }
     }
-    public class CsProperty : CsMemberLevel2
+
+    /// <summary>C# property declaration (indexed properties are <see cref="CsIndexedProperty"/> derived from this).</summary>
+    public class CsProperty : CsMethodOrProperty
     {
+        /// <summary>The <c>get</c> and/or <c>set</c> methods in this property declaration.</summary>
         public List<CsSimpleMethod> Methods = new List<CsSimpleMethod>();
+
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             var sb = modifiersCs();
@@ -281,9 +376,14 @@ namespace RT.ParseCs
             return sb.ToString();
         }
     }
+
+    /// <summary>C# indexed property declaration.</summary>
     public sealed class CsIndexedProperty : CsProperty
     {
+        /// <summary>The parameters of the indexed property.</summary>
         public List<CsParameter> Parameters = new List<CsParameter>();
+
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             var sb = modifiersCs();
@@ -302,12 +402,29 @@ namespace RT.ParseCs
             return sb.ToString();
         }
     }
-    public enum MethodType { Get, Set, Add, Remove }
+
+    /// <summary>Specifies the type of event or property method.</summary>
+    public enum MethodType
+    {
+        /// <summary>Property <c>get</c> method.</summary>
+        Get,
+        /// <summary>Property <c>set</c> method.</summary>
+        Set,
+        /// <summary>Event <c>add</c> method.</summary>
+        Add,
+        /// <summary>Event <c>remove</c> method.</summary>
+        Remove
+    }
+
+    /// <summary>C# event or property method.</summary>
     public sealed class CsSimpleMethod : CsMember
     {
+        /// <summary>Type of event or property method.</summary>
         public MethodType Type;
+        /// <summary>Body of the method.</summary>
         public CsBlock Body;
 
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             var sb = modifiersCs();
@@ -322,13 +439,23 @@ namespace RT.ParseCs
             return sb.ToString();
         }
     }
-    public sealed class CsMethod : CsMemberLevel2
+
+    /// <summary>C# method declaration (does not include constructors or operator overloads).</summary>
+    public sealed class CsMethod : CsMethodOrProperty
     {
-        public List<CsParameter> Parameters = new List<CsParameter>();
-        public List<CsGenericParameter> GenericTypeParameters = null;
-        public Dictionary<string, List<CsGenericTypeConstraint>> GenericTypeConstraints = null;
-        public CsBlock MethodBody;
+        /// <summary>Specifies whether the method is explicitly marked <c>partial</c>.</summary>
         public bool IsPartial;
+
+        /// <summary>The parameters of the method.</summary>
+        public List<CsParameter> Parameters = new List<CsParameter>();
+        /// <summary>The generic type parameters if the method is generic; otherwise, <c>null</c>.</summary>
+        public List<CsGenericParameter> GenericTypeParameters = null;
+        /// <summary>The constraints on each generic type parameter.</summary>
+        public Dictionary<string, List<CsGenericTypeConstraint>> GenericTypeConstraints = null;
+        /// <summary>
+        ///     The body of the method, or <c>null</c> if the method has no body (for example, <c>abstract</c> and
+        ///     <c>extern</c> methods).</summary>
+        public CsBlock MethodBody;
 
         private string genericTypeParametersCs()
         {
@@ -344,6 +471,7 @@ namespace RT.ParseCs
             return GenericTypeConstraints.Select(kvp => " where " + kvp.Key.Sanitize() + " : " + kvp.Value.Select(c => c.ToString()).JoinString(", ")).JoinString();
         }
 
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             var sb = modifiersCs();
@@ -372,6 +500,7 @@ namespace RT.ParseCs
             return sb.ToString();
         }
 
+        /// <summary>Overrides <see cref="CsNode.Subnodes"/>.</summary>
         public override IEnumerable<CsNode> Subnodes
         {
             get
@@ -410,12 +539,23 @@ namespace RT.ParseCs
             }
         }
     }
+
+    /// <summary>Base class for C# operator overload declarations.</summary>
     public abstract class CsOperatorOverload : CsMember
     {
+        /// <summary>
+        ///     Specifies whether the operator overload is explicitly marked <c>static</c> (which they all are, so setting
+        ///     this to <c>false</c> produces invalid C#).</summary>
         public bool IsStatic;
+
+        /// <summary>Return type of the operator overload.</summary>
         public CsTypeName ReturnType;
+        /// <summary>Parameter of the operator overload (first parameter in the case of binary operators).</summary>
         public CsParameter Parameter;
+        /// <summary>Operator overload method body.</summary>
         public CsBlock MethodBody;
+
+        /// <summary>Returns a <see cref="StringBuilder"/> containing the modifiers.</summary>
         protected override StringBuilder modifiersCs()
         {
             var sb = base.modifiersCs();
@@ -423,14 +563,29 @@ namespace RT.ParseCs
             return sb;
         }
     }
-    public enum CastOperatorType { Implicit, Explicit }
-    public sealed class CsCastOperatorOverload : CsOperatorOverload
+
+    /// <summary>Specifies whether a conversion operator overload is implicit or explicit.</summary>
+    public enum UserConversionType
     {
-        public CastOperatorType CastType;
+        /// <summary>The conversion operator defines an implicit user conversion.</summary>
+        Implicit,
+        /// <summary>The conversion operator defines an explicit user conversion.</summary>
+        Explicit
+    }
+
+    /// <summary>
+    ///     C# user-defined conversion declaration (also known as cast operator; for example, <c>public static implicit
+    ///     operator Vector3(ThreeVector obj) { /* ... */ }</c>).</summary>
+    public sealed class CsUserDefinedConversion : CsOperatorOverload
+    {
+        /// <summary>Whether the user conversion overloaded by this declaration is implicit or explicit.</summary>
+        public UserConversionType CastType;
+
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             var sb = modifiersCs();
-            sb.Append(CastType == CastOperatorType.Implicit ? "implicit operator " : "explicit operator ");
+            sb.Append(CastType == UserConversionType.Implicit ? "implicit operator " : "explicit operator ");
             sb.Append(ReturnType.ToString());
             sb.Append('(');
             sb.Append(Parameter.ToString());
@@ -439,9 +594,14 @@ namespace RT.ParseCs
             return sb.ToString();
         }
     }
+
+    /// <summary>C# unary operator overload (for example, <c>public static Vector3 operator-(Vector3 obj) { /* ... */ }</c>).</summary>
     public sealed class CsUnaryOperatorOverload : CsOperatorOverload
     {
+        /// <summary>The specific unary operator overloaded by this declaration.</summary>
         public UnaryOperator Operator;
+
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             var sb = modifiersCs();
@@ -455,10 +615,18 @@ namespace RT.ParseCs
             return sb.ToString();
         }
     }
+
+    /// <summary>
+    ///     C# binary operator overload (for example, <c>public static Vector3 operator+(Vector3 obj, Vector3 obj) { /* ... */
+    ///     }</c>).</summary>
     public sealed class CsBinaryOperatorOverload : CsOperatorOverload
     {
+        /// <summary>The specific binary operator overloaded by this declaration.</summary>
         public BinaryOperator Operator;
+        /// <summary>The second parameter of the binary operator overload.</summary>
         public CsParameter SecondParameter;
+
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             var sb = modifiersCs();
@@ -474,16 +642,47 @@ namespace RT.ParseCs
             return sb.ToString();
         }
     }
-    public enum ConstructorCallType { None, This, Base }
+
+    /// <summary>
+    ///     Specifies whether a constructor explicitly calls a constructor from the base class, a constructor from the same
+    ///     class, or neither, before the main block.</summary>
+    public enum ConstructorCallType
+    {
+        /// <summary>The constructor does not call another constructor explicitly.</summary>
+        None,
+        /// <summary>
+        ///     The constructor calls another constructor in the same class (for example, <c>public MyClass() : this(0) { /*
+        ///     ... */ }</c>).</summary>
+        This,
+        /// <summary>
+        ///     The constructor calls a constructor from the base class (for example, <c>public MyClass() : base(0) { /* ...
+        ///     */ }</c>).</summary>
+        Base
+    }
+
+    /// <summary>C# constructor declaration.</summary>
     public sealed class CsConstructor : CsMember
     {
+        /// <summary>Name of the constructor (must be the same as the name of the containing class).</summary>
         public string Name;
+        /// <summary>Constructor parameters.</summary>
         public List<CsParameter> Parameters = new List<CsParameter>();
+        /// <summary>Constructor method body.</summary>
         public CsBlock MethodBody;
+        /// <summary>
+        ///     Specifies whether a constructor explicitly calls a constructor from the base class, a constructor from the
+        ///     same class, or neither, before the main block.</summary>
         public ConstructorCallType CallType;
+        /// <summary>
+        ///     Arguments of the explicit call to another constructor before the main block (see <see cref="CallType"/>), or
+        ///     <c>null</c> if none.</summary>
         public List<CsArgument> CallArguments = new List<CsArgument>();
+        /// <summary>
+        ///     Specifies whether the constructor is explicitly marked <c>static</c> (which it never is, so setting this to
+        ///     <c>true</c> produces invalid C#).</summary>
         public bool IsStatic;
 
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             var sb = modifiersCs();
@@ -505,11 +704,16 @@ namespace RT.ParseCs
             return sb.ToString();
         }
     }
+
+    /// <summary>C# destructor declaration (for example, <c>~MyClass() { /* ... */ }</c>).</summary>
     public sealed class CsDestructor : CsMember
     {
+        /// <summary>Name of the destructor (must be the same as the name of the containing class).</summary>
         public string Name;
+        /// <summary>Destructor method body.</summary>
         public CsBlock MethodBody;
 
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             var sb = modifiersCs();
@@ -523,6 +727,7 @@ namespace RT.ParseCs
     #endregion
 
     #region Types
+
     public abstract class CsType : CsMember
     {
         public string Name;
@@ -576,6 +781,7 @@ namespace RT.ParseCs
             return sb;
         }
         public virtual void moreModifiers(StringBuilder sb) { }
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             var sb = modifiersCs();
@@ -652,6 +858,7 @@ namespace RT.ParseCs
     {
         public CsTypeName ReturnType;
         public List<CsParameter> Parameters = new List<CsParameter>();
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             var sb = modifiersCs();
@@ -691,6 +898,7 @@ namespace RT.ParseCs
     {
         public CsTypeName BaseType;
         public List<CsEnumValue> EnumValues = new List<CsEnumValue>();
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             var sb = modifiersCs();
@@ -712,6 +920,7 @@ namespace RT.ParseCs
         public List<CsCustomAttributeGroup> CustomAttributes = new List<CsCustomAttributeGroup>();
         public string Name;
         public CsExpression LiteralValue;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             var sb = new StringBuilder(CustomAttributes.Select(c => c.ToString()).JoinString());
@@ -734,6 +943,7 @@ namespace RT.ParseCs
         public string Name;
         public CsExpression DefaultValue;
         public bool IsThis, IsOut, IsRef, IsParams;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             // If 'Type' is null, this is a parameter to a lambda expression where the type is not specified.
@@ -765,12 +975,14 @@ namespace RT.ParseCs
     {
         public string Name;
         public List<CsTypeName> GenericTypeArguments = null;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return GenericTypeArguments == null ? Name.Sanitize() : string.Concat(Name.Sanitize(), '<', GenericTypeArguments.Select(p => p.ToString()).JoinString(", "), '>'); }
         public override bool EndsWithGenerics { get { return GenericTypeArguments != null && GenericTypeArguments.Count > 0; } }
     }
     public sealed class CsSimpleNameBuiltin : CsSimpleName
     {
         public string Builtin;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return Builtin; }
         public override bool EndsWithGenerics { get { return false; } }
     }
@@ -781,12 +993,14 @@ namespace RT.ParseCs
     }
     public sealed class CsEmptyGenericParameter : CsTypeName
     {
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return ""; }
     }
     public sealed class CsConcreteTypeName : CsTypeName
     {
         public bool HasGlobal;
         public List<CsSimpleName> Parts = new List<CsSimpleName>();
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return (HasGlobal ? "global::" : "") + Parts.Select(p => p.ToString()).JoinString("."); }
         public override string GetSingleIdentifier()
         {
@@ -800,16 +1014,19 @@ namespace RT.ParseCs
     {
         public CsTypeName InnerType;
         public List<int> ArrayRanks = new List<int> { 1 };
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return InnerType.ToString() + ArrayRanks.Select(rank => string.Concat("[", new string(',', rank - 1), "]")).JoinString(); }
     }
     public sealed class CsPointerTypeName : CsTypeName
     {
         public CsTypeName InnerType;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return InnerType.ToString() + "*"; }
     }
     public sealed class CsNullableTypeName : CsTypeName
     {
         public CsTypeName InnerType;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return InnerType.ToString() + "?"; }
     }
     #endregion
@@ -821,6 +1038,7 @@ namespace RT.ParseCs
         public VarianceMode Variance;
         public string Name;
         public List<CsCustomAttributeGroup> CustomAttributes = new List<CsCustomAttributeGroup>();
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             return CustomAttributes.Select(c => c.ToString()).JoinString() + (Variance == VarianceMode.Covariant ? "out " : Variance == VarianceMode.Contravariant ? "in " : "") + Name.Sanitize();
@@ -834,6 +1052,7 @@ namespace RT.ParseCs
     public sealed class CsGenericTypeConstraintBaseClass : CsGenericTypeConstraint
     {
         public CsTypeName BaseClass;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return BaseClass.ToString(); }
     }
     #endregion
@@ -844,6 +1063,7 @@ namespace RT.ParseCs
         public CsTypeName Type;
         public List<CsArgument> Arguments = new List<CsArgument>();
         public List<CsNameAndExpression> PropertySetters = new List<CsNameAndExpression>();
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             if (Arguments.Count + PropertySetters.Count == 0)
@@ -862,6 +1082,7 @@ namespace RT.ParseCs
         // custom attributes on parameters and on generic type parameters, and to ‘false’ for everything else.
         public bool NoNewLine = false;
 
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             var sb = new StringBuilder("[");
@@ -895,6 +1116,7 @@ namespace RT.ParseCs
     public sealed class CsBlock : CsStatement
     {
         public List<CsStatement> Statements = new List<CsStatement>();
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             var sb = new StringBuilder(gotoLabels());
@@ -909,6 +1131,7 @@ namespace RT.ParseCs
     {
         public CsExpression Expression;
         public abstract string Keyword { get; }
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             if (Expression == null)
@@ -926,17 +1149,20 @@ namespace RT.ParseCs
     {
         public CsExpression SwitchOn;
         public List<CsCaseLabel> Cases = new List<CsCaseLabel>();
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return string.Concat(gotoLabels(), "switch (", SwitchOn.ToString(), ")\n{\n", Cases.Select(c => c.ToString().Indent()).JoinString("\n"), "}\n"); }
     }
     public sealed class CsCaseLabel : CsNode
     {
         public List<CsExpression> CaseValues = new List<CsExpression>();  // use a 'null' expression for the 'default' label
         public List<CsStatement> Statements;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return string.Concat(CaseValues.Select(c => c == null ? "default:\n" : "case " + c.ToString() + ":\n").JoinString(), Statements.Select(s => s.ToString().Indent()).JoinString()); }
     }
     public sealed class CsExpressionStatement : CsStatement
     {
         public CsExpression Expression;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return string.Concat(gotoLabels(), Expression.ToString(), ";\n"); }
     }
     public sealed class CsVariableDeclarationStatement : CsStatement
@@ -944,6 +1170,7 @@ namespace RT.ParseCs
         public CsTypeName Type;
         public List<CsNameAndExpression> NamesAndInitializers = new List<CsNameAndExpression>();
         public bool IsConst;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             var sb = new StringBuilder(gotoLabels());
@@ -961,6 +1188,7 @@ namespace RT.ParseCs
         public string VariableName;
         public CsExpression LoopExpression;
         public CsStatement Body;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return string.Concat(gotoLabels(), "foreach (", VariableType == null ? "" : VariableType.ToString() + ' ', VariableName.Sanitize(), " in ", LoopExpression.ToString(), ")\n", Body is CsBlock ? Body.ToString() : Body.ToString().Indent()); }
     }
     public sealed class CsForStatement : CsStatement
@@ -969,6 +1197,7 @@ namespace RT.ParseCs
         public CsExpression TerminationCondition;
         public List<CsExpression> LoopExpressions = new List<CsExpression>();
         public CsStatement Body;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             var sb = new StringBuilder(gotoLabels());
@@ -988,6 +1217,7 @@ namespace RT.ParseCs
     {
         public CsStatement InitializationStatement;
         public CsStatement Body;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             var sb = new StringBuilder(gotoLabels());
@@ -1002,6 +1232,7 @@ namespace RT.ParseCs
     {
         public CsStatement InitializationStatement;
         public CsStatement Body;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             var sb = new StringBuilder(gotoLabels());
@@ -1017,6 +1248,7 @@ namespace RT.ParseCs
         public CsExpression IfExpression;
         public CsStatement Statement;
         public CsStatement ElseStatement;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             if (ElseStatement == null)
@@ -1032,6 +1264,7 @@ namespace RT.ParseCs
         public CsExpression Expression;
         public CsStatement Statement;
         public abstract string Keyword { get; }
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return string.Concat(gotoLabels(), Keyword, " (", Expression.ToString(), ")\n", Statement is CsBlock ? Statement.ToString() : Statement.ToString().Indent()); }
     }
     public sealed class CsWhileStatement : CsExpressionBlockStatement { public override string Keyword { get { return "while"; } } }
@@ -1040,6 +1273,7 @@ namespace RT.ParseCs
     {
         public CsExpression WhileExpression;
         public CsStatement Statement;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return string.Concat(gotoLabels(), "do\n", Statement is CsBlock ? Statement.ToString() : Statement.ToString().Indent(), "while (", WhileExpression.ToString(), ");\n"); }
     }
     public sealed class CsTryStatement : CsStatement
@@ -1047,6 +1281,7 @@ namespace RT.ParseCs
         public CsBlock Block;
         public List<CsCatchClause> Catches = new List<CsCatchClause>();
         public CsBlock Finally;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             var sb = new StringBuilder(gotoLabels());
@@ -1067,6 +1302,7 @@ namespace RT.ParseCs
         public CsTypeName Type;
         public string Name;
         public CsBlock Block;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             var sb = new StringBuilder("catch");
@@ -1096,17 +1332,64 @@ namespace RT.ParseCs
     #endregion
 
     #region Expressions
+    /// <summary>Base class for all C# expressions.</summary>
     public abstract class CsExpression : CsNode
     {
         internal virtual ResolveContext ToResolveContext(NameResolver resolver, bool isChecked) { return new ResolveContextExpression(ToLinqExpression(resolver, isChecked)); }
         internal static ResolveContext ToResolveContext(CsExpression expr, NameResolver resolver, bool isChecked) { return expr.ToResolveContext(resolver, isChecked); }
+        /// <summary>
+        ///     Converts this expression parse tree into an expression using the <c>System.Linq.Expressions</c> namespace. The
+        ///     expression thus returned can be used in scenarios surrounding <see cref="IQueryable"/>, such as LINQ-to-SQL,
+        ///     EntityFramework and many others.</summary>
+        /// <param name="resolver">
+        ///     Defines the rules of how to resolve names. Use this both to define which assemblies the code should be allowed
+        ///     to access as well as to declare variables and constants.</param>
+        /// <param name="isChecked">
+        ///     Specifies whether arithmetic operations (such as addition) should assume checked arithmetic or unchecked. The
+        ///     <c>checked()</c> and <c>unchecked()</c> expressions override this, so this only applies to expressions outside
+        ///     of those.</param>
+        /// <returns>
+        ///     An expression deriving from <see cref="System.Linq.Expressions.Expression"/>.</returns>
         public abstract Expression ToLinqExpression(NameResolver resolver, bool isChecked);
     }
-    public enum AssignmentOperator { Eq, TimesEq, DivEq, ModEq, PlusEq, MinusEq, ShlEq, ShrEq, AndEq, XorEq, OrEq }
+
+    /// <summary>Specifies the assignment operator used in a <see cref="CsAssignmentExpression"/>.</summary>
+    public enum AssignmentOperator
+    {
+        /// <summary>The <c>=</c> operator.</summary>
+        Eq,
+        /// <summary>The <c>*=</c> operator.</summary>
+        TimesEq,
+        /// <summary>The <c>/=</c> operator.</summary>
+        DivEq,
+        /// <summary>The <c>%=</c> operator.</summary>
+        ModEq,
+        /// <summary>The <c>+=</c> operator.</summary>
+        PlusEq,
+        /// <summary>The <c>-=</c> operator.</summary>
+        MinusEq,
+        /// <summary>The <c>&lt;&lt;=</c> operator.</summary>
+        ShlEq,
+        /// <summary>The <c>&gt;&gt;=</c> operator.</summary>
+        ShrEq,
+        /// <summary>The <c>&amp;=</c> operator.</summary>
+        AndEq,
+        /// <summary>The <c>^=</c> operator.</summary>
+        XorEq,
+        /// <summary>The <c>|=</c> operator.</summary>
+        OrEq
+    }
+
+    /// <summary>C# assignment expression (for example, <c>a += b</c>).</summary>
     public sealed class CsAssignmentExpression : CsExpression
     {
+        /// <summary>The assignment operator used.</summary>
         public AssignmentOperator Operator;
-        public CsExpression Left, Right;
+        /// <summary>The expression on the left of the operator.</summary>
+        public CsExpression Left;
+        /// <summary>The expression on the right of the operator.</summary>
+        public CsExpression Right;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             return string.Concat(
@@ -1129,6 +1412,7 @@ namespace RT.ParseCs
     public sealed class CsConditionalExpression : CsExpression
     {
         public CsExpression Condition, TruePart, FalsePart;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             return string.Concat(Condition.ToString(), " ? ", TruePart.ToString(), " : ", FalsePart.ToString());
@@ -1147,6 +1431,7 @@ namespace RT.ParseCs
     {
         public BinaryOperator Operator;
         public CsExpression Left, Right;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return string.Concat(Left.ToString(), ' ', Operator.ToCs(), ' ', Right.ToString()); }
         public override Expression ToLinqExpression(NameResolver resolver, bool isChecked)
         {
@@ -1212,6 +1497,7 @@ namespace RT.ParseCs
         public BinaryTypeOperator Operator;
         public CsExpression Left;
         public CsTypeName Right;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             return string.Concat(
@@ -1225,19 +1511,20 @@ namespace RT.ParseCs
     }
     public enum UnaryOperator
     {
-        // The following unary operators are used both in CsUnaryOperatorExpression and in CsOperatorOverload
+        // The following unary operators are used both in CsUnaryOperatorExpression and in CsUnaryOperatorOverload
         Plus, Minus, Not, Neg, PrefixInc, PrefixDec,
 
         // The following unary operators are used only in CsUnaryOperatorExpression
         PostfixInc, PostfixDec, PointerDeref, AddressOf,
 
-        // The following unary operators are used only in CsOperatorOverload
+        // The following unary operators are used only in CsUnaryOperatorOverload
         True, False
     }
     public sealed class CsUnaryOperatorExpression : CsExpression
     {
         public UnaryOperator Operator;
         public CsExpression Operand;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             if (Operator == UnaryOperator.PostfixInc)
@@ -1267,6 +1554,7 @@ namespace RT.ParseCs
     {
         public CsTypeName Type;
         public CsExpression Operand;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return string.Concat('(', Type.ToString(), ") ", Operand.ToString()); }
         public override Expression ToLinqExpression(NameResolver resolver, bool isChecked)
         {
@@ -1283,6 +1571,7 @@ namespace RT.ParseCs
         public MemberAccessType AccessType;
         public CsExpression Left;
         public CsSimpleName Right;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return string.Concat(Left.ToString(), AccessType == MemberAccessType.PointerDeref ? "->" : ".", Right.ToString()); }
         public override Expression ToLinqExpression(NameResolver resolver, bool isChecked) { return ToResolveContext(resolver, isChecked).ToExpression(); }
         internal override ResolveContext ToResolveContext(NameResolver resolver, bool isChecked)
@@ -1297,6 +1586,7 @@ namespace RT.ParseCs
         public bool IsIndexer;
         public CsExpression Left;
         public List<CsArgument> Arguments = new List<CsArgument>();
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return string.Concat(Left.ToString(), IsIndexer ? '[' : '(', Arguments.Select(p => p.ToString()).JoinString(", "), IsIndexer ? ']' : ')'); }
         public override Expression ToLinqExpression(NameResolver resolver, bool isChecked) { return ToResolveContext(resolver, isChecked).ToExpression(); }
         internal override ResolveContext ToResolveContext(NameResolver resolver, bool isChecked)
@@ -1345,33 +1635,39 @@ namespace RT.ParseCs
     public abstract class CsTypeOperatorExpression : CsExpression { public CsTypeName Type; }
     public sealed class CsTypeofExpression : CsTypeOperatorExpression
     {
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return string.Concat("typeof(", Type.ToString(), ')'); }
         public override Expression ToLinqExpression(NameResolver resolver, bool isChecked) { throw new NotImplementedException(); }
     }
     public sealed class CsSizeofExpression : CsTypeOperatorExpression
     {
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return string.Concat("sizeof(", Type.ToString(), ')'); }
         public override Expression ToLinqExpression(NameResolver resolver, bool isChecked) { throw new NotImplementedException(); }
     }
     public sealed class CsDefaultExpression : CsTypeOperatorExpression
     {
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return string.Concat("default(", Type.ToString(), ')'); }
         public override Expression ToLinqExpression(NameResolver resolver, bool isChecked) { throw new NotImplementedException(); }
     }
     public abstract class CsCheckedUncheckedExpression : CsExpression { public CsExpression Subexpression; }
     public sealed class CsCheckedExpression : CsCheckedUncheckedExpression
     {
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return string.Concat("checked(", Subexpression.ToString(), ')'); }
         public override Expression ToLinqExpression(NameResolver resolver, bool isChecked) { throw new NotImplementedException(); }
     }
     public sealed class CsUncheckedExpression : CsCheckedUncheckedExpression
     {
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return string.Concat("unchecked(", Subexpression.ToString(), ')'); }
         public override Expression ToLinqExpression(NameResolver resolver, bool isChecked) { throw new NotImplementedException(); }
     }
     public sealed class CsSimpleNameExpression : CsExpression
     {
         public CsSimpleName SimpleName;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return SimpleName.ToString(); }
         public override Expression ToLinqExpression(NameResolver resolver, bool isChecked) { return ToResolveContext(resolver, isChecked).ToExpression(); }
         internal override ResolveContext ToResolveContext(NameResolver resolver, bool isChecked) { return resolver.ResolveSimpleName(SimpleName); }
@@ -1379,12 +1675,14 @@ namespace RT.ParseCs
     public sealed class CsParenthesizedExpression : CsExpression
     {
         public CsExpression Subexpression;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return string.Concat('(', Subexpression.ToString(), ')'); }
         public override Expression ToLinqExpression(NameResolver resolver, bool isChecked) { return Subexpression.ToLinqExpression(resolver, isChecked); }
     }
     public sealed class CsStringLiteralExpression : CsExpression
     {
         public string Literal;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             bool useVerbatim;
@@ -1409,33 +1707,39 @@ namespace RT.ParseCs
     public sealed class CsCharacterLiteralExpression : CsExpression
     {
         public char Literal;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return string.Concat('\'', Literal.CsEscape(true, false), '\''); }
         public override Expression ToLinqExpression(NameResolver resolver, bool isChecked) { throw new NotImplementedException(); }
     }
     public sealed class CsNumberLiteralExpression : CsExpression
     {
         public string Literal;  // Could break this down further, but this is the safest
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return Literal; }
         public override Expression ToLinqExpression(NameResolver resolver, bool isChecked) { return Expression.Constant(ParserUtil.ParseNumericLiteral(Literal)); }
     }
     public sealed class CsBooleanLiteralExpression : CsExpression
     {
         public bool Literal;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return Literal ? "true" : "false"; }
         public override Expression ToLinqExpression(NameResolver resolver, bool isChecked) { throw new NotImplementedException(); }
     }
     public sealed class CsNullExpression : CsExpression
     {
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return "null"; }
         public override Expression ToLinqExpression(NameResolver resolver, bool isChecked) { throw new NotImplementedException(); }
     }
     public sealed class CsThisExpression : CsExpression
     {
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return "this"; }
         public override Expression ToLinqExpression(NameResolver resolver, bool isChecked) { throw new NotImplementedException(); }
     }
     public sealed class CsBaseExpression : CsExpression
     {
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return "base"; }
         public override Expression ToLinqExpression(NameResolver resolver, bool isChecked) { throw new NotImplementedException(); }
     }
@@ -1444,6 +1748,7 @@ namespace RT.ParseCs
         public CsTypeName Type;
         public List<CsArgument> Arguments = new List<CsArgument>();
         public List<CsExpression> Initializers;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             var sb = new StringBuilder("new ");
@@ -1467,12 +1772,14 @@ namespace RT.ParseCs
     public sealed class CsNewAnonymousTypeExpression : CsExpression
     {
         public List<CsExpression> Initializers = new List<CsExpression>();
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return string.Concat("new { ", Initializers.Select(ini => ini.ToString()).JoinString(", "), " }"); }
         public override Expression ToLinqExpression(NameResolver resolver, bool isChecked) { throw new NotImplementedException(); }
     }
     public sealed class CsNewImplicitlyTypedArrayExpression : CsExpression
     {
         public List<CsExpression> Items = new List<CsExpression>();
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return Items.Count == 0 ? "new[] { }" : string.Concat("new[] { ", Items.Select(p => p.ToString()).JoinString(", "), " }"); }
         public override Expression ToLinqExpression(NameResolver resolver, bool isChecked) { throw new NotImplementedException(); }
     }
@@ -1482,6 +1789,7 @@ namespace RT.ParseCs
         public List<CsExpression> SizeExpressions = new List<CsExpression>();
         public List<int> AdditionalRanks = new List<int>();
         public List<CsExpression> Items;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             var sb = new StringBuilder("new ");
@@ -1509,6 +1817,7 @@ namespace RT.ParseCs
     {
         public CsTypeName Type;
         public CsExpression SizeExpression;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             return string.Concat("stackalloc ", Type, '[', SizeExpression, ']');
@@ -1536,6 +1845,7 @@ namespace RT.ParseCs
     public sealed class CsSimpleLambdaExpression : CsLambdaExpression
     {
         public CsExpression Body;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return string.Concat(parametersCs(), ' ', Body.ToString()); }
         private bool isImplicit()
         {
@@ -1582,6 +1892,7 @@ namespace RT.ParseCs
     public sealed class CsBlockLambdaExpression : CsLambdaExpression
     {
         public CsBlock Block;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return string.Concat(parametersCs(), '\n', Block.ToString().Trim()); }
         public override Expression ToLinqExpression(NameResolver resolver, bool isChecked) { throw new NotImplementedException(); }
     }
@@ -1589,6 +1900,7 @@ namespace RT.ParseCs
     {
         public List<CsParameter> Parameters;
         public CsBlock Block;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             if (Parameters == null)
@@ -1601,6 +1913,7 @@ namespace RT.ParseCs
     public sealed class CsArrayLiteralExpression : CsExpression
     {
         public List<CsExpression> Expressions = new List<CsExpression>();
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             if (!Expressions.Any())
@@ -1623,6 +1936,7 @@ namespace RT.ParseCs
     public sealed class CsLinqExpression : CsExpression
     {
         public List<CsLinqElement> Elements = new List<CsLinqElement>();
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             var sb = new StringBuilder();
@@ -1641,6 +1955,7 @@ namespace RT.ParseCs
     {
         public string ItemName;
         public CsExpression SourceExpression;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return string.Concat("from ", ItemName.Sanitize(), " in ", SourceExpression.ToString()); }
     }
     public sealed class CsLinqJoinClause : CsLinqElement
@@ -1648,6 +1963,7 @@ namespace RT.ParseCs
         public string ItemName;
         public CsExpression SourceExpression, KeyExpression1, KeyExpression2;
         public string IntoName;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             var s = string.Concat("join ", ItemName.Sanitize(), " in ", SourceExpression, " on ", KeyExpression1, " equals ", KeyExpression2);
@@ -1658,16 +1974,19 @@ namespace RT.ParseCs
     {
         public string ItemName;
         public CsExpression Expression;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return string.Concat("let ", ItemName.Sanitize(), " = ", Expression.ToString()); }
     }
     public sealed class CsLinqWhereClause : CsLinqElement
     {
         public CsExpression WhereExpression;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return string.Concat("where ", WhereExpression.ToString()); }
     }
     public sealed class CsLinqOrderByClause : CsLinqElement
     {
         public List<CsLinqOrderBy> KeyExpressions = new List<CsLinqOrderBy>();
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             return "orderby " + KeyExpressions.Select(k => k.ToString()).JoinString(", ");
@@ -1678,6 +1997,7 @@ namespace RT.ParseCs
     {
         public CsExpression OrderByExpression;
         public LinqOrderByType OrderByType;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             return OrderByExpression.ToString() + (OrderByType == LinqOrderByType.Ascending ? " ascending" : OrderByType == LinqOrderByType.Descending ? " descending" : "");
@@ -1686,17 +2006,20 @@ namespace RT.ParseCs
     public sealed class CsLinqSelectClause : CsLinqElement
     {
         public CsExpression SelectExpression;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return string.Concat("select ", SelectExpression.ToString()); }
     }
     public sealed class CsLinqGroupByClause : CsLinqElement
     {
         public CsExpression SelectionExpression;
         public CsExpression KeyExpression;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return string.Concat("group ", SelectionExpression.ToString(), " by ", KeyExpression.ToString()); }
     }
     public sealed class CsLinqIntoClause : CsLinqElement
     {
         public string ItemName;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString() { return string.Concat("into ", ItemName.Sanitize()); }
     }
     #endregion
@@ -1708,6 +2031,7 @@ namespace RT.ParseCs
     {
         public string Name;
         public CsExpression Expression;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             if (Expression == null)
@@ -1722,6 +2046,7 @@ namespace RT.ParseCs
         public string ArgumentName;
         public ArgumentMode ArgumentMode;
         public CsExpression ArgumentExpression;
+        /// <summary>Converts this C# parse tree node back into equivalent C# code.</summary>
         public override string ToString()
         {
             var sb = new StringBuilder();

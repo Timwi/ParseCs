@@ -668,24 +668,24 @@ namespace RT.ParseCs
                     mem.IsUnsafe = true;
 
                 // CsMemberLevel2 (CsProperty, CsMethod)
-                else if (tok[i].IsBuiltin("static") && mem is CsMemberLevel2)
-                    ((CsMemberLevel2) mem).IsStatic = true;
-                else if (tok[i].IsBuiltin("abstract") && mem is CsMemberLevel2)
-                    ((CsMemberLevel2) mem).IsAbstract = true;
-                else if (tok[i].IsBuiltin("sealed") && mem is CsMemberLevel2)
-                    ((CsMemberLevel2) mem).IsSealed = true;
-                else if (tok[i].IsBuiltin("virtual") && mem is CsMemberLevel2)
-                    ((CsMemberLevel2) mem).IsVirtual = true;
-                else if (tok[i].IsBuiltin("override") && mem is CsMemberLevel2)
-                    ((CsMemberLevel2) mem).IsOverride = true;
-                else if (tok[i].IsBuiltin("extern") && mem is CsMemberLevel2)
-                    ((CsMemberLevel2) mem).IsExtern = true;
+                else if (tok[i].IsBuiltin("static") && mem is CsMethodOrProperty)
+                    ((CsMethodOrProperty) mem).IsStatic = true;
+                else if (tok[i].IsBuiltin("abstract") && mem is CsMethodOrProperty)
+                    ((CsMethodOrProperty) mem).IsAbstract = true;
+                else if (tok[i].IsBuiltin("sealed") && mem is CsMethodOrProperty)
+                    ((CsMethodOrProperty) mem).IsSealed = true;
+                else if (tok[i].IsBuiltin("virtual") && mem is CsMethodOrProperty)
+                    ((CsMethodOrProperty) mem).IsVirtual = true;
+                else if (tok[i].IsBuiltin("override") && mem is CsMethodOrProperty)
+                    ((CsMethodOrProperty) mem).IsOverride = true;
+                else if (tok[i].IsBuiltin("extern") && mem is CsMethodOrProperty)
+                    ((CsMethodOrProperty) mem).IsExtern = true;
                 else if (tok[i].IsIdentifier("partial") && mem is CsMethod)
                     ((CsMethod) mem).IsPartial = true;
 
                 // CsMultiMember (CsEvent, CsField)
-                else if (tok[i].IsBuiltin("static") && mem is CsMultiMember)
-                    ((CsMultiMember) mem).IsStatic = true;
+                else if (tok[i].IsBuiltin("static") && mem is CsEventOrField)
+                    ((CsEventOrField) mem).IsStatic = true;
                 else if (tok[i].IsBuiltin("abstract") && mem is CsEvent)
                     ((CsEvent) mem).IsAbstract = true;
                 else if (tok[i].IsBuiltin("sealed") && mem is CsEvent)
@@ -1069,10 +1069,10 @@ namespace RT.ParseCs
             meth.EndIndex = tok[i - 1].EndIndex;
             return meth;
         }
-        private static CsMultiMember parseFieldOrEventDeclaration(bool isEvent, TokenJar tok, ref int i, List<CsCustomAttributeGroup> customAttribs, int afterModifiers, int afterName, CsTypeName type, CsTypeName implementsFrom, string name)
+        private static CsEventOrField parseFieldOrEventDeclaration(bool isEvent, TokenJar tok, ref int i, List<CsCustomAttributeGroup> customAttribs, int afterModifiers, int afterName, CsTypeName type, CsTypeName implementsFrom, string name)
         {
             var startIndex = tok[i].StartIndex;
-            CsMultiMember ret;
+            CsEventOrField ret;
             if (isEvent)
                 ret = new CsEvent { StartIndex = startIndex, Type = type, CustomAttributes = customAttribs, ImplementsFrom = implementsFrom };
             else
@@ -1191,9 +1191,9 @@ namespace RT.ParseCs
             }
             return op;
         }
-        private static CsCastOperatorOverload parseCastOperatorOverloadDeclaration(TokenJar tok, ref int i, List<CsCustomAttributeGroup> customAttribs, int j)
+        private static CsUserDefinedConversion parseCastOperatorOverloadDeclaration(TokenJar tok, ref int i, List<CsCustomAttributeGroup> customAttribs, int j)
         {
-            var op = new CsCastOperatorOverload { StartIndex = tok[i].StartIndex, CastType = tok[j].IsBuiltin("implicit") ? CastOperatorType.Implicit : CastOperatorType.Explicit, CustomAttributes = customAttribs };
+            var op = new CsUserDefinedConversion { StartIndex = tok[i].StartIndex, CastType = tok[j].IsBuiltin("implicit") ? UserConversionType.Implicit : UserConversionType.Explicit, CustomAttributes = customAttribs };
             parseModifiers(op, tok, ref i);
             if (i != j)
                 throw new ParseException("The modifier '{0}' is not valid for {1} operator declarations.".Fmt(tok[i].TokenStr, tok[j].TokenStr), tok[i].StartIndex);
