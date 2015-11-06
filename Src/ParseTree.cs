@@ -95,14 +95,14 @@ namespace RT.ParseCs
             foreach (var ns in Namespaces)
             {
                 if (!first)
-                    sb.Append("\n");
+                    sb.Append('\n');
                 first = false;
                 sb.Append(ns.ToString());
             }
             foreach (var ty in Types)
             {
                 if (!first)
-                    sb.Append("\n");
+                    sb.Append('\n');
                 first = false;
                 sb.Append(ty.ToString());
             }
@@ -166,14 +166,14 @@ namespace RT.ParseCs
             foreach (var ns in Namespaces)
             {
                 if (!first)
-                    sb.Append("\n");
+                    sb.Append('\n');
                 first = false;
                 sb.Append(ns.ToString().Indent());
             }
             foreach (var ty in Types)
             {
                 if (!first)
-                    sb.Append("\n");
+                    sb.Append('\n');
                 first = false;
                 sb.Append(ty.ToString().Indent());
             }
@@ -1111,7 +1111,7 @@ namespace RT.ParseCs
     public abstract class CsStatement : CsNode
     {
         public List<string> GotoLabels;
-        protected string gotoLabels() { return GotoLabels == null ? "" : GotoLabels.Select(g => g.Sanitize() + ':').JoinString(" ") + (this is CsEmptyStatement ? " " : "\n"); }
+        protected string gotoLabels() { return GotoLabels == null ? "" : GotoLabels.Select(g => g.Sanitize() + ':').JoinString(" ") + (this is CsEmptyStatement ? ' ' : '\n'); }
     }
     public sealed class CsEmptyStatement : CsStatement { public override string ToString() { return gotoLabels() + ";\n"; } }
     public sealed class CsBlock : CsStatement
@@ -1318,7 +1318,7 @@ namespace RT.ParseCs
                 }
                 sb.Append(")");
             }
-            sb.Append("\n");
+            sb.Append('\n');
             sb.Append(Body is CsBlock ? Body.ToString() : Body.ToString().Indent());
             return sb.ToString();
         }
