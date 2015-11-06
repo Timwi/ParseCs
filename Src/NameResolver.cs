@@ -60,18 +60,18 @@ namespace RT.ParseCs
             return new NameResolver(type.Namespace, type, instance, assemblies);
         }
 
-        internal ResolveContext ResolveSimpleName(CsSimpleName simpleName, ResolveContext context = null)
+        internal ResolveContext ResolveSimpleName(CsIdentifier simpleName, ResolveContext context = null)
         {
             if (context is ResolveContextMethodGroup)
                 throw new NotImplementedException("Access to method groups is not supported.");
 
-            var simpleNameBuiltin = simpleName as CsSimpleNameBuiltin;
+            var simpleNameBuiltin = simpleName as CsKeywordIdentifier;
             if (simpleNameBuiltin != null)
             {
                 if (context != null)
                     throw new InvalidOperationException("Unexpected built-in: {0}.".Fmt(simpleNameBuiltin.ToString()));
 
-                switch (simpleNameBuiltin.Builtin)
+                switch (simpleNameBuiltin.Keyword)
                 {
                     case "string": return new ResolveContextType(typeof(string));
                     case "sbyte": return new ResolveContextType(typeof(sbyte));
@@ -102,7 +102,7 @@ namespace RT.ParseCs
                 }
             }
 
-            var simpleNameIdentifier = simpleName as CsSimpleNameIdentifier;
+            var simpleNameIdentifier = simpleName as CsNameIdentifier;
             if (simpleNameIdentifier == null)
                 throw new InvalidOperationException("Unexpected simple-name type: {0}.".Fmt(simpleName.GetType().FullName));
 

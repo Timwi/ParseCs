@@ -214,7 +214,7 @@ namespace RT.ParseCs
             ns.EndIndex = tok[i - 1].EndIndex;
             return ns;
         }
-        private static CsCustomAttributeGroup parseCustomAttributeGroup(TokenJar tok, ref int i, bool noNewLine)
+        private static CsCustomAttributeGroup parseCustomAttributeGroup(TokenJar tok, ref int i)
         {
             var startIndex = tok[i].StartIndex;
             tok[i].Assert("[");
@@ -289,12 +289,12 @@ namespace RT.ParseCs
                         var posName = tok[i].TokenStr;
                         i += 2;
                         var expr = parseExpression(tok, ref i);
-                        attr.Arguments.Add(new CsArgument { StartIndex = argStartIndex, EndIndex = tok[i - 1].EndIndex, ArgumentName = posName, ArgumentExpression = expr });
+                        attr.Arguments.Add(new CsArgument { StartIndex = argStartIndex, EndIndex = tok[i - 1].EndIndex, Name = posName, Expression = expr });
                     }
                     else if (acceptPositionalArgs)
                     {
                         var expr = parseExpression(tok, ref i);
-                        attr.Arguments.Add(new CsArgument { StartIndex = argStartIndex, EndIndex = tok[i - 1].EndIndex, ArgumentExpression = expr });
+                        attr.Arguments.Add(new CsArgument { StartIndex = argStartIndex, EndIndex = tok[i - 1].EndIndex, Expression = expr });
                     }
                     else
                         throw new ParseException("Identifier '=' <expression>, or ')' expected.", tok[i].StartIndex);
@@ -313,19 +313,19 @@ namespace RT.ParseCs
                 else
                     throw new ParseException("']' or ',' expected. (1)", tok[i].StartIndex);
             }
-            return new CsCustomAttributeGroup { StartIndex = startIndex, EndIndex = tok[i - 1].EndIndex, CustomAttributes = group, Location = loc, NoNewLine = noNewLine };
+            return new CsCustomAttributeGroup { StartIndex = startIndex, EndIndex = tok[i - 1].EndIndex, CustomAttributes = group, Location = loc };
         }
-        private static List<CsGenericParameter> parseGenericTypeParameterList(TokenJar tok, ref int i)
+        private static List<CsGenericTypeParameter> parseGenericTypeParameterList(TokenJar tok, ref int i)
         {
             tok[i].Assert("<");
-            var genericTypeParameters = new List<CsGenericParameter>();
+            var genericTypeParameters = new List<CsGenericTypeParameter>();
             while (true)
             {
                 i++;
                 var startIndex = tok[i].StartIndex;
                 var customAttribs = new List<CsCustomAttributeGroup>();
                 while (tok[i].IsBuiltin("["))
-                    customAttribs.Add(parseCustomAttributeGroup(tok, ref i, true));
+                    customAttribs.Add(parseCustomAttributeGroup(tok, ref i));
 
                 var variance = VarianceMode.Invariant;
                 if (tok[i].IsBuiltin("in") || tok[i].IsBuiltin("out"))
@@ -335,7 +335,7 @@ namespace RT.ParseCs
                 }
 
                 var name = tok[i].Identifier();
-                genericTypeParameters.Add(new CsGenericParameter { StartIndex = startIndex, EndIndex = tok[i].EndIndex, Name = name, CustomAttributes = customAttribs, Variance = variance });
+                genericTypeParameters.Add(new CsGenericTypeParameter { StartIndex = startIndex, EndIndex = tok[i].EndIndex, Name = name, CustomAttributes = customAttribs, Variance = variance });
                 i++;
                 if (tok[i].IsBuiltin(","))
                     continue;
@@ -450,7 +450,7 @@ namespace RT.ParseCs
             var startIndex = tok[i].StartIndex;
             var customAttribs = new List<CsCustomAttributeGroup>();
             while (tok[i].IsBuiltin("["))
-                customAttribs.Add(parseCustomAttributeGroup(tok, ref i, true));
+                customAttribs.Add(parseCustomAttributeGroup(tok, ref i));
 
             bool isThis = false, isOut = false, isRef = false, isParams = false;
             if (tok[i].IsBuiltin("this"))
@@ -513,9 +513,9 @@ namespace RT.ParseCs
             bool onShr = false;
             while (true)
             {
-                CsSimpleName partAbstract;
+                CsIdentifier partAbstract;
                 if (tok[j].Type == TokenType.Builtin && (flags & typeIdentifierFlags.AllowKeywords) == typeIdentifierFlags.AllowKeywords && builtinTypes.Contains(tok[j].TokenStr))
-                    partAbstract = new CsSimpleNameBuiltin { StartIndex = tok[j].StartIndex, EndIndex = tok[j].EndIndex, Builtin = tok[j].TokenStr };
+                    partAbstract = new CsKeywordIdentifier { StartIndex = tok[j].StartIndex, EndIndex = tok[j].EndIndex, Keyword = tok[j].TokenStr };
                 else if (ty.Parts.Count > 0 && (flags & typeIdentifierFlags.Lenient) != 0 && tok[j].Type != TokenType.Identifier)
                 {
                     ty.EndIndex = tok[j].EndIndex;
@@ -524,16 +524,16 @@ namespace RT.ParseCs
                 else if (tok[j].Type != TokenType.Identifier && tryNotToThrow)
                     return null;
                 else
-                    partAbstract = new CsSimpleNameIdentifier { StartIndex = tok[j].StartIndex, EndIndex = tok[j].EndIndex, Name = tok[j].Identifier("Type expected.") };
+                    partAbstract = new CsNameIdentifier { StartIndex = tok[j].StartIndex, EndIndex = tok[j].EndIndex, Name = tok[j].Identifier("Type expected.") };
                 j++;
                 ty.Parts.Add(partAbstract);
                 i = j;
 
                 if (tok[j].IsBuiltin("<"))
                 {
-                    if (!(partAbstract is CsSimpleNameIdentifier))
+                    if (!(partAbstract is CsNameIdentifier))
                         throw new ParseException("'{0}' cannot have generic arguments.".Fmt(partAbstract.ToString()), tok[j].StartIndex, ty);
-                    var part = (CsSimpleNameIdentifier) partAbstract;
+                    var part = (CsNameIdentifier) partAbstract;
                     part.GenericTypeArguments = new List<CsTypeName>();
                     j++;
                     if ((flags & typeIdentifierFlags.AllowEmptyGenerics) != 0 && (tok[j].IsBuiltin(",") || tok[j].IsBuiltin(">")))
@@ -732,7 +732,7 @@ namespace RT.ParseCs
             while (tok[i].IsBuiltin("["))
             {
                 var k = i;
-                var attr = parseCustomAttributeGroup(tok, ref i, false);
+                var attr = parseCustomAttributeGroup(tok, ref i);
                 if (returnAssemblyAndModuleCustomAttributes && (attr.Location == CustomAttributeLocation.Assembly || attr.Location == CustomAttributeLocation.Module))
                 {
                     if (customAttribs.Count > 0)
@@ -890,7 +890,7 @@ namespace RT.ParseCs
             // If it's "<", it may be a generic method, or it may be a property, event or (possibly generic) method that explicitly implements an interface member from a generic interface.
             // If it's ".", it is a property, event or (possibly generic) method that explicitly implements an interface member.
 
-            List<CsGenericParameter> genericTypeParameters = null;
+            List<CsGenericTypeParameter> genericTypeParameters = null;
             CsConcreteTypeName implementsFrom = null;
 
             if (tok[j].IsBuiltin("<") || tok[j].IsBuiltin("."))
@@ -916,7 +916,7 @@ namespace RT.ParseCs
                 }
 
                 // Apart from 'this', no builtins (keywords) are allowed
-                if (!(ty.Parts[ty.Parts.Count - 1] is CsSimpleNameIdentifier))
+                if (!(ty.Parts[ty.Parts.Count - 1] is CsNameIdentifier))
                     throw new ParseException("Identifier expected instead of '{0}'.".Fmt(ty.Parts[ty.Parts.Count - 1]), tok[j - 1].StartIndex);
 
                 // The following cases are still possible:
@@ -937,20 +937,20 @@ namespace RT.ParseCs
 
                 // In all cases, ‘ty’ contains not just the interface name, but also *at least* the member name and *at most* the member name plus its generic parameters.
                 // Therefore, either way, remove it from ‘ty’ to get the genuine interface name.
-                var lastPart = (CsSimpleNameIdentifier) ty.Parts[ty.Parts.Count - 1];
+                var lastPart = (CsNameIdentifier) ty.Parts[ty.Parts.Count - 1];
                 ty.Parts.RemoveAt(ty.Parts.Count - 1);
 
                 if (lastPart.GenericTypeArguments != null)
                 {
                     // If the last part has generic type “arguments”, then we are in case ① or ③b.
                     // In that case, we need to convert those “arguments” into generic parameters.
-                    genericTypeParameters = new List<CsGenericParameter>();
+                    genericTypeParameters = new List<CsGenericTypeParameter>();
                     foreach (var g in lastPart.GenericTypeArguments)
                     {
                         var single = g.GetSingleIdentifier();
                         if (single == null)
                             throw new ParseException("Invalid generic type parameter declaration.", tok[j].StartIndex);
-                        genericTypeParameters.Add(new CsGenericParameter { StartIndex = g.StartIndex, EndIndex = g.EndIndex, Name = single });
+                        genericTypeParameters.Add(new CsGenericTypeParameter { StartIndex = g.StartIndex, EndIndex = g.EndIndex, Name = single });
                     }
                 }
                 else if (tok[j].IsBuiltin("<"))
@@ -1302,7 +1302,7 @@ namespace RT.ParseCs
                 var startIndex = tok[i].StartIndex;
                 var cAttribs = new List<CsCustomAttributeGroup>();
                 while (tok[i].IsBuiltin("["))
-                    cAttribs.Add(parseCustomAttributeGroup(tok, ref i, false));
+                    cAttribs.Add(parseCustomAttributeGroup(tok, ref i));
                 var m = new CsSimpleMethod { StartIndex = startIndex, CustomAttributes = cAttribs };
                 parseModifiers(m, tok, ref i);
                 if (!tok[i].IsIdentifier("get") && !tok[i].IsIdentifier("set"))
@@ -1341,7 +1341,7 @@ namespace RT.ParseCs
                 var startIndex = tok[i].StartIndex;
                 var cAttribs = new List<CsCustomAttributeGroup>();
                 while (tok[i].IsBuiltin("["))
-                    cAttribs.Add(parseCustomAttributeGroup(tok, ref i, false));
+                    cAttribs.Add(parseCustomAttributeGroup(tok, ref i));
                 var m = new CsSimpleMethod { StartIndex = startIndex, CustomAttributes = cAttribs };
                 parseModifiers(m, tok, ref i);
                 if (!tok[i].IsIdentifier("add") && !tok[i].IsIdentifier("remove"))
@@ -1402,7 +1402,7 @@ namespace RT.ParseCs
                 try
                 {
                     while (tok[i].IsBuiltin("["))
-                        cAttribs.Add(parseCustomAttributeGroup(tok, ref i, false));
+                        cAttribs.Add(parseCustomAttributeGroup(tok, ref i));
                     ident = tok[i].Identifier("Enum value expected.");
                 }
                 catch (ParseException e)
@@ -1463,8 +1463,8 @@ namespace RT.ParseCs
             }
             catch (ParseException e)
             {
-                if (e.IncompleteResult is List<CsGenericParameter>)
-                    deleg.GenericTypeParameters = (List<CsGenericParameter>) e.IncompleteResult;
+                if (e.IncompleteResult is List<CsGenericTypeParameter>)
+                    deleg.GenericTypeParameters = (List<CsGenericTypeParameter>) e.IncompleteResult;
                 else if (e.IncompleteResult is List<CsParameter>)
                     deleg.Parameters = (List<CsParameter>) e.IncompleteResult;
                 else if (e.IncompleteResult is Dictionary<string, List<CsGenericTypeConstraint>>)
@@ -1496,8 +1496,8 @@ namespace RT.ParseCs
                 try { type.GenericTypeParameters = parseGenericTypeParameterList(tok, ref i); }
                 catch (ParseException e)
                 {
-                    if (e.IncompleteResult is List<CsGenericParameter>)
-                        type.GenericTypeParameters = (List<CsGenericParameter>) e.IncompleteResult;
+                    if (e.IncompleteResult is List<CsGenericTypeParameter>)
+                        type.GenericTypeParameters = (List<CsGenericTypeParameter>) e.IncompleteResult;
                     throw new ParseException(e.Message, e.Index, type, e);
                 }
             }
@@ -1603,7 +1603,7 @@ namespace RT.ParseCs
             {
                 var dow = new CsDoWhileStatement { StartIndex = tok[i].StartIndex };
                 i++;
-                dow.Statement = parseStatement(tok, ref i);
+                dow.Body = parseStatement(tok, ref i);
                 if (!tok[i].IsBuiltin("while") || !tok[i + 1].IsBuiltin("("))
                     throw new ParseException("'while' followed by '(' expected.", tok[i].StartIndex);
                 i += 2;
@@ -1795,7 +1795,7 @@ namespace RT.ParseCs
             i++;
             if (!tok[i].IsBuiltin("{"))
                 throw new ParseException("'{' expected after 'try'.", tok[i].StartIndex);
-            tr.Block = parseBlock(tok, ref i);
+            tr.TryBody = parseBlock(tok, ref i);
             if (!tok[i].IsBuiltin("catch") && !tok[i].IsBuiltin("finally"))
                 throw new ParseException("'catch' or 'finally' expected after 'try' block.", tok[i].StartIndex);
             while (tok[i].IsBuiltin("catch"))
@@ -1818,11 +1818,11 @@ namespace RT.ParseCs
                 }
                 if (!tok[i].IsBuiltin("{"))
                     throw new ParseException("'{' expected.", tok[i].StartIndex);
-                try { ctch.Block = parseBlock(tok, ref i); }
+                try { ctch.Body = parseBlock(tok, ref i); }
                 catch (ParseException e)
                 {
                     if (e.IncompleteResult is CsBlock)
-                        ctch.Block = (CsBlock) e.IncompleteResult;
+                        ctch.Body = (CsBlock) e.IncompleteResult;
                     throw new ParseException(e.Message, e.Index, tr, e);
                 }
                 ctch.EndIndex = tok[i - 1].EndIndex;
@@ -1858,12 +1858,12 @@ namespace RT.ParseCs
             if (!tok[i].IsBuiltin(")"))
                 throw new ParseException("')' expected.", tok[i].StartIndex);
             i++;
-            try { stat.Statement = parseStatement(tok, ref i); }
+            try { stat.Body = parseStatement(tok, ref i); }
             catch (ParseException e)
             {
                 if (e.IncompleteResult is CsStatement)
                 {
-                    stat.Statement = (CsStatement) e.IncompleteResult;
+                    stat.Body = (CsStatement) e.IncompleteResult;
                     throw new ParseException(e.Message, e.Index, stat, e);
                 }
                 throw;
@@ -2067,7 +2067,7 @@ namespace RT.ParseCs
             if (!tok[i].IsBuiltin("{"))
                 throw new ParseException("'{' expected.", tok[i].StartIndex, sw);
             i++;
-            CsCaseLabel cas = null;
+            CsSwitchCase cas = null;
             while (!tok[i].IsBuiltin("}"))
             {
                 if (tok[i].IsBuiltin("case") || (tok[i].IsBuiltin("default") && !tok[i + 1].IsBuiltin("(")))
@@ -2075,7 +2075,7 @@ namespace RT.ParseCs
                     bool isDef = tok[i].IsBuiltin("default");
                     if (cas == null || cas.Statements != null)
                     {
-                        cas = new CsCaseLabel { StartIndex = tok[i].StartIndex };
+                        cas = new CsSwitchCase { StartIndex = tok[i].StartIndex };
                         sw.Cases.Add(cas);
                     }
                     i++;
@@ -2663,7 +2663,7 @@ namespace RT.ParseCs
                     i++;
                 }
             }
-            if (left is CsSimpleNameExpression && ((CsSimpleNameExpression) left).SimpleName is CsSimpleNameBuiltin)
+            if (left is CsIdentifierExpression && ((CsIdentifierExpression) left).Identifier is CsKeywordIdentifier)
             {
                 if (tryNotToThrow)
                     return null;
@@ -2708,7 +2708,7 @@ namespace RT.ParseCs
                             i++;
                         }
                         var expr = parseExpression(tok, ref i);
-                        arguments.Add(new CsArgument { StartIndex = argStartIndex, EndIndex = expr.EndIndex, ArgumentName = argName, ArgumentMode = inoutref, ArgumentExpression = expr });
+                        arguments.Add(new CsArgument { StartIndex = argStartIndex, EndIndex = expr.EndIndex, Name = argName, Mode = inoutref, Expression = expr });
                         if (tok[i].IsBuiltin(isIndexer ? "]" : ")"))
                             break;
                         else if (!tok[i].IsBuiltin(","))
@@ -2719,7 +2719,7 @@ namespace RT.ParseCs
                 catch (ParseException e)
                 {
                     if (e.IncompleteResult is CsExpression)
-                        arguments.Add(new CsArgument { StartIndex = tok[i].StartIndex, ArgumentName = argName, ArgumentMode = inoutref, ArgumentExpression = (CsExpression) e.IncompleteResult });
+                        arguments.Add(new CsArgument { StartIndex = tok[i].StartIndex, Name = argName, Mode = inoutref, Expression = (CsExpression) e.IncompleteResult });
                     throw new ParseException(e.Message, e.Index, arguments, e);
                 }
             }
@@ -2893,9 +2893,9 @@ namespace RT.ParseCs
                         var ret = new CsNewArrayExpression { StartIndex = startIndex, Type = ty };
                         ret.SizeExpressions.AddRange(parseArgumentList(tok, ref i, out dummy).Select(p =>
                         {
-                            if (p.ArgumentMode != ArgumentMode.In)
+                            if (p.Mode != ArgumentMode.In)
                                 throw new ParseException("'out' and 'ref' parameters are not allowed in an array constructor.", tok[k].StartIndex);
-                            return p.ArgumentExpression;
+                            return p.Expression;
                         }));
                         while (tok[i].IsBuiltin("["))
                         {
@@ -2934,7 +2934,7 @@ namespace RT.ParseCs
                 i++;
                 var delegateParams = tok[i].IsBuiltin("(") ? parseParameterList(tok, ref i) : null;
                 var block = parseBlock(tok, ref i);
-                return new CsAnonymousMethodExpression { StartIndex = startIndex, EndIndex = tok[i - 1].EndIndex, Block = block, Parameters = delegateParams };
+                return new CsAnonymousMethodExpression { StartIndex = startIndex, EndIndex = tok[i - 1].EndIndex, Body = block, Parameters = delegateParams };
             }
 
             // See if this could be a lambda expression. If it is, set 'parameters' to something non-null and move 'i' to behind the '=>'. Otherwise, keep 'i' unchanged.
@@ -2993,17 +2993,17 @@ namespace RT.ParseCs
                 if (tok[i].IsBuiltin("{"))
                 {
                     var lambda = new CsBlockLambdaExpression { StartIndex = startIndex, Parameters = parameters };
-                    try { lambda.Block = parseBlock(tok, ref i); }
+                    try { lambda.Body = parseBlock(tok, ref i); }
                     catch (ParseException e)
                     {
                         if (e.IncompleteResult is CsBlock)
                         {
-                            lambda.Block = (CsBlock) e.IncompleteResult;
+                            lambda.Body = (CsBlock) e.IncompleteResult;
                             throw new ParseException(e.Message, e.Index, lambda, e);
                         }
                         throw;
                     }
-                    lambda.EndIndex = lambda.Block.EndIndex;
+                    lambda.EndIndex = lambda.Body.EndIndex;
                     return lambda;
                 }
                 else
@@ -3096,10 +3096,10 @@ namespace RT.ParseCs
             }
 
             var simpleName = parseExpressionIdentifier(tok, ref i);
-            return new CsSimpleNameExpression { StartIndex = startIndex, EndIndex = tok[i - 1].EndIndex, SimpleName = simpleName };
+            return new CsIdentifierExpression { StartIndex = startIndex, EndIndex = tok[i - 1].EndIndex, Identifier = simpleName };
         }
         private static string[] _genericMethodGroupMagicalTokens = new[] { "(", ")", "]", ":", ";", ",", ".", "?", "==", "!=" };
-        private static CsSimpleName parseExpressionIdentifier(TokenJar tok, ref int i)
+        private static CsIdentifier parseExpressionIdentifier(TokenJar tok, ref int i)
         {
             var startIndex = tok[i].StartIndex;
 
@@ -3129,7 +3129,7 @@ namespace RT.ParseCs
             }
 
             afterTy:
-            var ret = new CsSimpleNameIdentifier { StartIndex = startIndex, EndIndex = tok[i].EndIndex, Name = tok[i].Identifier("Identifier expected.") };
+            var ret = new CsNameIdentifier { StartIndex = startIndex, EndIndex = tok[i].EndIndex, Name = tok[i].Identifier("Identifier expected.") };
             i++;
             return ret;
         }
