@@ -1,3 +1,3 @@
-Full documentation: http://docs.timwi.de/RT.ParseCs
+This was a hobby project to write a C# parser for fun. It correctly parses all features of C# version 4.0.
 
-The unit tests (in the Tests folder) require NUnitDirect: https://github.com/RT-Projects/NUnitDirect
+Needless to say, the .NET Framework now has a fully-featured C# parser in it, and so does the Mono project.
